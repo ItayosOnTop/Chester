@@ -1,226 +1,266 @@
-// index.js — Minecraft 1.21.1 storage & utility bot
+// index.js — Minecraft 1.21.11 storage & utility bot
 const mineflayer = require('mineflayer')
 const { pathfinder, Movements } = require('mineflayer-pathfinder')
-const armorManager = require('mineflayer-armor-manager')
-const { plugin: autoEat } = require('mineflayer-auto-eat')
+const readline = require('readline')
 const config = require('./chests.json')
 const ChestManager = require('./chestManager')
 const CombatManager = require('./combat')
 const NavigationManager = require('./navigation')
 
-// ─── Bot connection settings ─────────────────────────────────────────────────
-// Edit these or use environment variables
+// ─── Bot connection settings ──────────────────────────────────────────────────
 const BOT_OPTIONS = {
   host: process.env.MC_HOST || 'localhost',
   port: parseInt(process.env.MC_PORT || '25565'),
   username: process.env.MC_USERNAME || 'StorageBot',
   version: '1.21.11',
-  auth: process.env.MC_AUTH || 'offline', // use 'microsoft' for online-mode servers
+  auth: process.env.MC_AUTH || 'offline',
 }
+
+// Player to /msg when replying to terminal commands
+const TERMINAL_TARGET = 'ItayosOnTop'
 
 console.log(`Connecting to ${BOT_OPTIONS.host}:${BOT_OPTIONS.port} as ${BOT_OPTIONS.username}`)
 
 const bot = mineflayer.createBot(BOT_OPTIONS)
-
-// Load plugins
 bot.loadPlugin(pathfinder)
-bot.loadPlugin(armorManager)
-bot.loadPlugin(autoEat)
 
-// Module instances (created once bot is ready)
 let chestMgr, combatMgr, navMgr
 
-// ─── Bot ready ───────────────────────────────────────────────────────────────
-bot.once('spawn', () => {
-  console.log('[Bot] Spawned!')
+// ─── Armor priority ───────────────────────────────────────────────────────────
+const ARMOR_PRIORITY = {
+  head:  ['netherite_helmet','diamond_helmet','iron_helmet','golden_helmet','chainmail_helmet','leather_helmet'],
+  torso: ['netherite_chestplate','diamond_chestplate','iron_chestplate','golden_chestplate','chainmail_chestplate','leather_chestplate'],
+  legs:  ['netherite_leggings','diamond_leggings','iron_leggings','golden_leggings','chainmail_leggings','leather_leggings'],
+  feet:  ['netherite_boots','diamond_boots','iron_boots','golden_boots','chainmail_boots','leather_boots'],
+}
 
-  // Configure pathfinder movements
+const FOOD_PRIORITY = [
+  'cooked_beef','cooked_porkchop','cooked_mutton','cooked_chicken',
+  'cooked_salmon','cooked_cod','bread','baked_potato','carrot','apple',
+]
+
+async function manageArmor() {
+  for (const [slot, priority] of Object.entries(ARMOR_PRIORITY)) {
+    for (const armorName of priority) {
+      const item = bot.inventory.items().find(i => i.name === armorName)
+      if (item) {
+        try { await bot.equip(item, slot) } catch (_) {}
+        break
+      }
+    }
+  }
+}
+
+let isEating = false
+async function autoEat() {
+  if (isEating || bot.food >= 16) return
+  isEating = true
+  for (const foodName of FOOD_PRIORITY) {
+    const food = bot.inventory.items().find(i => i.name === foodName)
+    if (food) {
+      try {
+        await bot.equip(food, 'hand')
+        await bot.consume()
+        console.log(`[AutoEat] Ate ${foodName}`)
+      } catch (_) {}
+      break
+    }
+  }
+  isEating = false
+}
+
+// ─── Unified command handler ──────────────────────────────────────────────────
+async function handleCommand(cmd, args, say) {
+  switch (cmd) {
+    case '!help':
+      say('=== Storage Bot Commands ===')
+      say('!sort — deposit inventory into correct chests')
+      say('!fetch <item> [amount] — get item from its chest')
+      say('!collect <chest_id> — empty a chest into my inventory')
+      say('!chests — list configured chests')
+      say('!follow [player] — follow a player')
+      say('!come [player] — navigate to a player once')
+      say('!goto <x> <y> <z> — navigate to coords')
+      say('!stop — stop current movement')
+      say('!combat on|off — toggle combat')
+      say('!armor — equip best armor now')
+      say('!status — show HP, food, nav, combat status')
+      say('!inv — list inventory')
+      break
+
+    case '!sort':
+      navMgr.stop()
+      await chestMgr.sortInventory(say)
+      break
+
+    case '!fetch':
+      if (!args[0]) { say('Usage: !fetch <item_name> [amount]'); break }
+      navMgr.stop()
+      await chestMgr.fetchItem(args[0].toLowerCase(), parseInt(args[1] || '64'), say)
+      break
+
+    case '!collect':
+      if (!args[0]) { say('Usage: !collect <chest_id>'); break }
+      navMgr.stop()
+      await chestMgr.collectFromChest(args[0], say)
+      break
+
+    case '!chests':
+      chestMgr.listChests(say)
+      break
+
+    case '!follow':
+      navMgr.startFollow(args[0] || TERMINAL_TARGET, say)
+      break
+
+    case '!come':
+      await navMgr.comeToPlayer(args[0] || TERMINAL_TARGET, say)
+      break
+
+    case '!goto': {
+      const [x, y, z] = args
+      if (!x || !y || !z || isNaN(x) || isNaN(y) || isNaN(z)) {
+        say('Usage: !goto <x> <y> <z>'); break
+      }
+      await navMgr.gotoCoords(parseFloat(x), parseFloat(y), parseFloat(z), say)
+      break
+    }
+
+    case '!stop':
+      navMgr.stop(say)
+      break
+
+    case '!combat':
+      if (args[0] === 'off') { combatMgr.disable(); say('Combat disabled.') }
+      else if (args[0] === 'on') { combatMgr.enable(); say('Combat enabled.') }
+      else say(`Combat is currently ${combatMgr.enabled ? 'ON' : 'OFF'}`)
+      break
+
+    case '!armor':
+      await manageArmor()
+      say('Armor updated!')
+      break
+
+    case '!status':
+      say(`HP: ${Math.round(bot.health)}/20 | Food: ${Math.round(bot.food)}/20`)
+      say(navMgr.status())
+      say(combatMgr.status())
+      break
+
+    case '!inv': {
+      const items = bot.inventory.items()
+      if (items.length === 0) { say('Inventory is empty.'); break }
+      const groups = {}
+      for (const item of items) groups[item.name] = (groups[item.name] || 0) + item.count
+      say('Inventory: ' + Object.entries(groups).map(([n, c]) => `${c}x ${n}`).join(', '))
+      break
+    }
+
+    default:
+      say(`Unknown command: ${cmd}. Type !help for list.`)
+  }
+}
+
+// ─── Spawn ────────────────────────────────────────────────────────────────────
+bot.once('spawn', () => {
+  console.log('[Bot] Spawned! Type commands in terminal (e.g. !help)')
+
   const mcData = require('minecraft-data')(bot.version)
   const movements = new Movements(bot, mcData)
   movements.allowSprinting = true
-  movements.canDig = false // don't break blocks during navigation
+  movements.canDig = false
+  movements.maxDropDown = 256 // allow falling any distance
   bot.pathfinder.setMovements(movements)
 
-  // Configure auto-eat
-  bot.autoEat.options = {
-    priority: 'foodPoints',
-    startAt: 14, // eat when hunger drops to 14 (out of 20)
-    bannedFood: [],
-  }
-  bot.autoEat.enable()
-
-  // Configure armor manager (auto-equips best armor automatically)
-  // mineflayer-armor-manager handles this passively once loaded
-
-  // Init modules
   chestMgr = new ChestManager(bot, config)
   combatMgr = new CombatManager(bot, config)
   navMgr = new NavigationManager(bot, config)
 
-  // Start combat loop
+  // Wire combat manager into nav and chest so they can lock it during navigation
+  navMgr.combatMgr = combatMgr
+  chestMgr.combatMgr = combatMgr
+
+  // When bot has no active goal and is in the air, clear pathfinder so native gravity applies
+  bot.on('physicsTick', () => {
+    if (!bot.entity) return
+    if (!bot.entity.onGround && !bot.pathfinder.isMoving()) {
+      bot.pathfinder.setGoal(null)
+    }
+  })
+
   combatMgr.start()
+  setTimeout(manageArmor, 2000)
 
   bot.chat('Storage bot online! Type !help for commands.')
+  setupTerminal()
 })
 
-// ─── Chat command handler ─────────────────────────────────────────────────────
+// ─── Terminal input ───────────────────────────────────────────────────────────
+function setupTerminal() {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: '> ' })
+  rl.prompt()
+
+  rl.on('line', async (line) => {
+    const trimmed = line.trim()
+    if (!trimmed) { rl.prompt(); return }
+
+    const say = (text) => {
+      console.log(`[Bot] ${text}`)
+      try { bot.whisper(TERMINAL_TARGET, text) } catch (_) {}
+    }
+
+    if (trimmed.startsWith('!')) {
+      const parts = trimmed.split(/\s+/)
+      await handleCommand(parts[0].toLowerCase(), parts.slice(1), say)
+    } else {
+      bot.chat(trimmed)
+      console.log(`[Chat] ${trimmed}`)
+    }
+
+    rl.prompt()
+  })
+}
+
+// ─── In-game chat commands ────────────────────────────────────────────────────
 bot.on('chat', async (username, message) => {
   if (username === bot.username) return
-  const args = message.trim().split(/\s+/)
-  const cmd = args[0].toLowerCase()
-
-  // Helper: respond to the same chat channel
-  const say = (text) => bot.chat(text)
-
-  // ─── Help ──────────────────────────────────────────────────────────────────
-  if (cmd === '!help') {
-    say('=== Storage Bot Commands ===')
-    say('!sort — deposit all inventory items to their chests')
-    say('!fetch <item> [amount] — get an item from its chest')
-    say('!collect <chest_id> — empty a chest into my inventory')
-    say('!chests — list all configured chests')
-    say('!follow <player> — follow a player')
-    say('!come <player> — come to a player once')
-    say('!goto <x> <y> <z> — navigate to coords')
-    say('!stop — stop moving')
-    say('!combat on|off — toggle combat mode')
-    say('!status — show current status')
-    say('!inv — list my inventory')
-    return
-  }
-
-  // ─── Sort inventory ────────────────────────────────────────────────────────
-  if (cmd === '!sort') {
-    navMgr.stop()
-    await chestMgr.sortInventory(say)
-    return
-  }
-
-  // ─── Fetch item ────────────────────────────────────────────────────────────
-  if (cmd === '!fetch') {
-    if (!args[1]) { say('Usage: !fetch <item_name> [amount]'); return }
-    navMgr.stop()
-    const itemName = args[1].toLowerCase()
-    const amount = parseInt(args[2] || '64')
-    await chestMgr.fetchItem(itemName, amount, say)
-    return
-  }
-
-  // ─── Collect from chest ────────────────────────────────────────────────────
-  if (cmd === '!collect') {
-    if (!args[1]) { say('Usage: !collect <chest_id>'); return }
-    navMgr.stop()
-    await chestMgr.collectFromChest(args[1], say)
-    return
-  }
-
-  // ─── List chests ───────────────────────────────────────────────────────────
-  if (cmd === '!chests') {
-    chestMgr.listChests(say)
-    return
-  }
-
-  // ─── Follow player ─────────────────────────────────────────────────────────
-  if (cmd === '!follow') {
-    const target = args[1] || username
-    navMgr.startFollow(target, say)
-    return
-  }
-
-  // ─── Come to player ────────────────────────────────────────────────────────
-  if (cmd === '!come') {
-    const target = args[1] || username
-    await navMgr.comeToPlayer(target, say)
-    return
-  }
-
-  // ─── GoTo coords ──────────────────────────────────────────────────────────
-  if (cmd === '!goto') {
-    const [, x, y, z] = args
-    if (!x || !y || !z || isNaN(x) || isNaN(y) || isNaN(z)) {
-      say('Usage: !goto <x> <y> <z>'); return
-    }
-    await navMgr.gotoCoords(parseFloat(x), parseFloat(y), parseFloat(z), say)
-    return
-  }
-
-  // ─── Stop movement ─────────────────────────────────────────────────────────
-  if (cmd === '!stop') {
-    navMgr.stop(say)
-    return
-  }
-
-  // ─── Combat toggle ─────────────────────────────────────────────────────────
-  if (cmd === '!combat') {
-    if (args[1] === 'off') { combatMgr.disable(); say('Combat disabled.') }
-    else if (args[1] === 'on') { combatMgr.enable(); say('Combat enabled.') }
-    else say(`Combat is currently ${combatMgr.enabled ? 'ON' : 'OFF'}`)
-    return
-  }
-
-  // ─── Status ───────────────────────────────────────────────────────────────
-  if (cmd === '!status') {
-    const hp = Math.round(bot.health)
-    const food = Math.round(bot.food)
-    say(`HP: ${hp}/20 | Food: ${food}/20`)
-    say(navMgr.status())
-    say(combatMgr.status())
-    return
-  }
-
-  // ─── Inventory ────────────────────────────────────────────────────────────
-  if (cmd === '!inv') {
-    const items = bot.inventory.items()
-    if (items.length === 0) { say('Inventory is empty.'); return }
-    // Group by name
-    const groups = {}
-    for (const item of items) {
-      groups[item.name] = (groups[item.name] || 0) + item.count
-    }
-    say('Inventory: ' + Object.entries(groups).map(([n, c]) => `${c}× ${n}`).join(', '))
-    return
-  }
+  const trimmed = message.trim()
+  if (!trimmed.startsWith('!')) return
+  const parts = trimmed.split(/\s+/)
+  await handleCommand(parts[0].toLowerCase(), parts.slice(1), (text) => bot.chat(text))
 })
 
-// ─── Events ──────────────────────────────────────────────────────────────────
+// ─── Events ───────────────────────────────────────────────────────────────────
 bot.on('health', () => {
-  if (bot.health < 4) {
+  autoEat()
+  if (bot.health <= 4) {
     bot.chat('Low health! Retreating...')
     combatMgr.disable()
     navMgr.stop()
-    // Re-enable combat after a brief recovery window
-    setTimeout(() => {
-      if (bot.health > 8) combatMgr.enable()
-    }, 10000)
+    setTimeout(() => { if (bot.health > 8) combatMgr.enable() }, 10000)
   }
 })
 
+bot.on('playerCollect', (collector) => {
+  if (collector.username === bot.username) setTimeout(manageArmor, 500)
+})
+
 bot.on('death', () => {
-  console.log('[Bot] Died — respawning')
+  console.log('[Bot] Died')
   bot.chat('I died!')
   combatMgr.disable()
   navMgr.stop()
-  // Re-enable after respawn settling time
   setTimeout(() => combatMgr.enable(), 5000)
 })
 
 bot.on('kicked', (reason) => console.log('[Bot] Kicked:', reason))
 bot.on('error', (err) => console.error('[Bot] Error:', err.message))
 
-bot.on('autoeat_started', () => console.log('[AutoEat] Eating...'))
-bot.on('autoeat_stopped', () => console.log('[AutoEat] Done eating'))
-
-bot.on('playerCollect', (collector, itemDrop) => {
-  if (collector.username === bot.username) {
-    console.log(`[Bot] Picked up ${itemDrop.metadata?.[8]?.present ? 'item' : 'something'}`)
-  }
-})
-
-// Graceful shutdown
+// ─── Graceful shutdown ────────────────────────────────────────────────────────
 process.on('SIGINT', () => {
   console.log('Shutting down...')
   combatMgr.stop()
   navMgr.stop()
-  bot.quit('Bot shutting down')
+  bot.quit('Shutting down')
   process.exit(0)
 })

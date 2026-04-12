@@ -8,7 +8,9 @@ class ChestManager {
     this.config = config
     this.chests = config.chests
     this.defaultChest = config.defaultChest
-    // Build a quick item → chest lookup
+    this.combatMgr = null // wired in from index.js
+
+    // Build item → chest lookup
     this.itemMap = {}
     for (const chest of this.chests) {
       for (const item of chest.items) {
@@ -17,45 +19,41 @@ class ChestManager {
     }
   }
 
-  // Find which configured chest an item belongs to
   getChestForItem(itemName) {
     const chestId = this.itemMap[itemName] || this.defaultChest
     return this.chests.find(c => c.id === chestId) || null
   }
 
-  // Find which configured chest holds a specific item (for fetching)
   findChestContaining(itemName) {
-    // First check the config mapping
-    const configChest = this.chests.find(c => c.items.includes(itemName))
-    return configChest || null
+    return this.chests.find(c => c.items.includes(itemName)) || null
   }
 
-  // Navigate close enough to interact with a chest
   async navigateToChest(chestConfig) {
-    const pos = new Vec3(chestConfig.position.x, chestConfig.position.y, chestConfig.position.z)
-    const goal = new goals.GoalNear(pos.x, pos.y, pos.z, 2)
-    await this.bot.pathfinder.goto(goal)
+    const pos = chestConfig.position
+    this.combatMgr?.lock()
+    try {
+      await this.bot.pathfinder.goto(new goals.GoalNear(pos.x, pos.y, pos.z, 2))
+    } finally {
+      this.combatMgr?.release()
+    }
   }
 
-  // Open a chest block and return the mineflayer chest window
   async openChestAt(chestConfig) {
     const pos = new Vec3(chestConfig.position.x, chestConfig.position.y, chestConfig.position.z)
     const block = this.bot.blockAt(pos)
     if (!block || !block.name.includes('chest')) {
-      throw new Error(`No chest found at ${JSON.stringify(chestConfig.position)} (found: ${block ? block.name : 'nothing'})`)
+      throw new Error(`No chest at ${JSON.stringify(chestConfig.position)} (found: ${block ? block.name : 'nothing'})`)
     }
     return await this.bot.openChest(block)
   }
 
-  // ─── Sort: deposit all inventory items into their correct chests ─────────
+  // ─── Sort: deposit all inventory items into correct chests ────────────────
   async sortInventory(sendMessage) {
-    sendMessage('Starting sort — scanning inventory...')
+    sendMessage('Scanning inventory...')
 
-    // Group items by destination chest
-    const plan = {} // chestId → [inventoryItem, ...]
+    const plan = {}
     for (const item of this.bot.inventory.items()) {
-      // Skip currently worn armor
-      if (item.slot < 9) continue
+      if (item.slot < 9) continue // skip armor slots
       const chest = this.getChestForItem(item.name)
       if (!chest) continue
       if (!plan[chest.id]) plan[chest.id] = { chest, items: [] }
@@ -63,7 +61,7 @@ class ChestManager {
     }
 
     if (Object.keys(plan).length === 0) {
-      sendMessage('Nothing to sort — inventory is clean!')
+      sendMessage('Nothing to sort!')
       return
     }
 
@@ -72,18 +70,15 @@ class ChestManager {
       try {
         await this.navigateToChest(chest)
         const window = await this.openChestAt(chest)
-
         for (const item of items) {
           try {
             await window.deposit(item.type, null, item.count)
-            sendMessage(`  Deposited ${item.count}× ${item.name}`)
+            sendMessage(`  Deposited ${item.count}x ${item.name}`)
           } catch (e) {
             sendMessage(`  Could not deposit ${item.name}: ${e.message}`)
           }
         }
-
         await window.close()
-        // Small delay so the server doesn't rate-limit us
         await this.bot.waitForTicks(10)
       } catch (e) {
         sendMessage(`Error at ${chest.label}: ${e.message}`)
@@ -93,7 +88,7 @@ class ChestManager {
     sendMessage('Sort complete!')
   }
 
-  // ─── Fetch: pull a specific item from its chest ──────────────────────────
+  // ─── Fetch: pull a specific item from its chest ───────────────────────────
   async fetchItem(itemName, amount, sendMessage) {
     const chest = this.findChestContaining(itemName)
     if (!chest) {
@@ -101,27 +96,23 @@ class ChestManager {
       return false
     }
 
-    sendMessage(`Fetching ${amount}× ${itemName} from ${chest.label}...`)
-
+    sendMessage(`Fetching ${amount}x ${itemName} from ${chest.label}...`)
     try {
       await this.navigateToChest(chest)
       const window = await this.openChestAt(chest)
-
-      // Check how many are available
       const available = window.containerItems().filter(i => i.name === itemName)
-      const totalAvailable = available.reduce((sum, i) => sum + i.count, 0)
+      const total = available.reduce((s, i) => s + i.count, 0)
 
-      if (totalAvailable === 0) {
+      if (total === 0) {
         sendMessage(`"${itemName}" is not in ${chest.label} right now.`)
         await window.close()
         return false
       }
 
-      const toWithdraw = Math.min(amount, totalAvailable)
+      const toWithdraw = Math.min(amount, total)
       await window.withdraw(available[0].type, null, toWithdraw)
       await window.close()
-
-      sendMessage(`Got ${toWithdraw}× ${itemName}!`)
+      sendMessage(`Got ${toWithdraw}x ${itemName}!`)
       return true
     } catch (e) {
       sendMessage(`Failed to fetch ${itemName}: ${e.message}`)
@@ -129,35 +120,23 @@ class ChestManager {
     }
   }
 
-  // ─── Collect: pick up all items from a named chest ───────────────────────
+  // ─── Collect: empty a named chest into inventory ──────────────────────────
   async collectFromChest(chestId, sendMessage) {
     const chest = this.chests.find(c => c.id === chestId)
-    if (!chest) {
-      sendMessage(`Unknown chest id: "${chestId}"`)
-      return
-    }
+    if (!chest) { sendMessage(`Unknown chest id: "${chestId}"`); return }
 
-    sendMessage(`Collecting all items from ${chest.label}...`)
-
+    sendMessage(`Collecting from ${chest.label}...`)
     try {
       await this.navigateToChest(chest)
       const window = await this.openChestAt(chest)
-
       const items = window.containerItems()
-      if (items.length === 0) {
-        sendMessage(`${chest.label} is empty.`)
-        await window.close()
-        return
-      }
+      if (items.length === 0) { sendMessage(`${chest.label} is empty.`); await window.close(); return }
 
       for (const item of items) {
-        try {
-          await window.withdraw(item.type, null, item.count)
-        } catch (e) {
+        try { await window.withdraw(item.type, null, item.count) } catch (e) {
           sendMessage(`Could not take ${item.name}: ${e.message}`)
         }
       }
-
       await window.close()
       sendMessage(`Collected everything from ${chest.label}!`)
     } catch (e) {
@@ -165,14 +144,13 @@ class ChestManager {
     }
   }
 
-  // List all configured chests and their item categories
   listChests(sendMessage) {
     sendMessage('=== Configured Chests ===')
     for (const chest of this.chests) {
-      const items = chest.items.length > 0
+      const preview = chest.items.length > 0
         ? chest.items.slice(0, 4).join(', ') + (chest.items.length > 4 ? '...' : '')
         : 'catch-all'
-      sendMessage(`[${chest.id}] ${chest.label}: ${items}`)
+      sendMessage(`[${chest.id}] ${chest.label}: ${preview}`)
     }
   }
 }

@@ -1,4 +1,6 @@
 // combat.js — handles hostile mob detection and auto-attack
+const { goals } = require('mineflayer-pathfinder')
+
 class CombatManager {
   constructor(bot, config) {
     this.bot = bot
@@ -9,10 +11,11 @@ class CombatManager {
     this.enabled = true
     this.currentTarget = null
     this.loopInterval = null
+    // When true, combat will not touch pathfinder (navigation command running)
+    this.navLock = false
   }
 
   start() {
-    // Run a combat scan every 500ms
     this.loopInterval = setInterval(() => this._tick(), 500)
     console.log('[Combat] Combat loop started')
   }
@@ -24,25 +27,18 @@ class CombatManager {
     }
   }
 
-  enable() {
-    this.enabled = true
-    console.log('[Combat] Enabled')
-  }
+  enable()  { this.enabled = true;  this.currentTarget = null; console.log('[Combat] Enabled') }
+  disable() { this.enabled = false; this.currentTarget = null; console.log('[Combat] Disabled') }
 
-  disable() {
-    this.enabled = false
-    this.currentTarget = null
-    console.log('[Combat] Disabled')
-  }
+  // Call before a navigation command; call release() when done
+  lock()    { this.navLock = true  }
+  release() { this.navLock = false }
 
-  _isHostile(entity) {
-    return this.hostileMobs.has(entity.name)
-  }
+  _isHostile(entity) { return this.hostileMobs.has(entity.name) }
 
   _nearestHostile() {
     let nearest = null
     let nearestDist = Infinity
-
     for (const entity of Object.values(this.bot.entities)) {
       if (!this._isHostile(entity)) continue
       const dist = this.bot.entity.position.distanceTo(entity.position)
@@ -51,13 +47,12 @@ class CombatManager {
         nearestDist = dist
       }
     }
-
     return nearest
   }
 
   async _tick() {
     if (!this.enabled) return
-    if (this.bot.pathfinder && this.bot.pathfinder.isMoving()) return // Don't interrupt navigation
+    if (this.navLock) return  // navigation command in progress — hands off pathfinder
 
     const target = this._nearestHostile()
     if (!target) {
@@ -74,46 +69,39 @@ class CombatManager {
     }
 
     const dist = this.bot.entity.position.distanceTo(target.position)
-
-    // Equip the best available weapon before attacking
     await this._equipBestWeapon()
 
     if (dist <= this.attackRange) {
-      // Face and strike
       await this.bot.lookAt(target.position.offset(0, target.height * 0.5, 0))
       this.bot.attack(target)
     } else {
-      // Chase the mob
-      const { goals } = require('mineflayer-pathfinder')
+      // Chase — use setGoal (non-blocking) so we don't await and block the tick
       try {
-        await this.bot.pathfinder.goto(
-          new (require('mineflayer-pathfinder').goals.GoalFollow)(target, this.attackRange - 0.5)
-        )
-      } catch (_) {
-        // Pathfinding may throw if the goal is already satisfied — ignore
-      }
+        this.bot.pathfinder.setGoal(new goals.GoalFollow(target, this.attackRange - 0.5), true)
+      } catch (_) {}
     }
   }
 
   async _equipBestWeapon() {
-    const weapons = ['netherite_sword', 'diamond_sword', 'iron_sword', 'stone_sword', 'wooden_sword', 'golden_sword',
-                     'netherite_spear', 'diamond_spear', 'iron_spear', 'copper_spear', 'stone_spear', 'wooden_spear']
+    const weapons = [
+      'netherite_sword', 'diamond_sword', 'iron_sword', 'stone_sword', 'wooden_sword', 'golden_sword',
+      'netherite_spear', 'diamond_spear', 'iron_spear', 'copper_spear', 'stone_spear', 'wooden_spear',
+    ]
     for (const weapon of weapons) {
       const item = this.bot.inventory.items().find(i => i.name === weapon)
       if (item) {
         if (this.bot.heldItem?.name !== weapon) {
-          await this.bot.equip(item, 'hand')
+          try { await this.bot.equip(item, 'hand') } catch (_) {}
         }
         return
       }
     }
-    // Fall back to best axe
     const axes = ['netherite_axe', 'diamond_axe', 'iron_axe', 'stone_axe', 'wooden_axe']
     for (const axe of axes) {
       const item = this.bot.inventory.items().find(i => i.name === axe)
       if (item) {
         if (this.bot.heldItem?.name !== axe) {
-          await this.bot.equip(item, 'hand')
+          try { await this.bot.equip(item, 'hand') } catch (_) {}
         }
         return
       }
@@ -122,7 +110,7 @@ class CombatManager {
 
   status() {
     const nearby = this._nearestHostile()
-    if (!nearby) return `Combat: ON | No threats nearby (scanning ${this.scanRadius}m)`
+    if (!nearby) return `Combat: ${this.enabled ? 'ON' : 'OFF'} | No threats nearby (scanning ${this.scanRadius}m)`
     const dist = Math.round(this.bot.entity.position.distanceTo(nearby.position))
     return `Combat: ON | Engaging ${nearby.name} (${dist}m away)`
   }
