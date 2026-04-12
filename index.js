@@ -1,18 +1,17 @@
 // index.js — Minecraft 1.21.11 storage & utility bot
 const mineflayer = require('mineflayer')
 const { pathfinder, Movements } = require('mineflayer-pathfinder')
-const movement = require('mineflayer-movement')
 const readline = require('readline')
 const config = require('./chests.json')
-const ChestManager = require('../chestManager')
-const CombatManager = require('../combat')
+const ChestManager = require('./chestManager')
+const CombatManager = require('./combat')
 const NavigationManager = require('./navigation')
 
 // ─── Bot connection settings ──────────────────────────────────────────────────
 const BOT_OPTIONS = {
   host: process.env.MC_HOST || 'localhost',
   port: parseInt(process.env.MC_PORT || '25565'),
-  username: process.env.MC_USERNAME || 'StorageBot',
+  username: process.env.MC_USERNAME || 'Chester',
   version: '1.21.11',
   auth: process.env.MC_AUTH || 'offline',
 }
@@ -24,7 +23,6 @@ console.log(`Connecting to ${BOT_OPTIONS.host}:${BOT_OPTIONS.port} as ${BOT_OPTI
 
 const bot = mineflayer.createBot(BOT_OPTIONS)
 bot.loadPlugin(pathfinder)
-bot.loadPlugin(movement)
 
 let chestMgr, combatMgr, navMgr
 
@@ -145,6 +143,8 @@ async function handleCommand(cmd, args, say) {
 
     case '!stop':
       navMgr.stop(say)
+      combatMgr.disable()
+      say('Everything stopped.')
       break
 
     case '!combat':
@@ -194,10 +194,10 @@ bot.once('spawn', () => {
   movements.allowSprinting = true
   movements.canDig = true  // Allow digging through blocks for better paths
   movements.canPlaceOn = true  // Allow placing blocks to create bridges/paths
-  movements.maxDropDown = 256  // Allow falling any distance
+  movements.maxDropDown = 4  // Allow falling up to 4 blocks (safer than 256)
   movements.allow1by1towers = true  // Allow building 1x1 towers to reach higher places
-  movements.allowFreeMotion = true  // Allow free motion in air (for parkour)
-  movements.allowParkour = true  // Enable parkour movements
+  movements.allowFreeMotion = false  // Disable free motion in air to respect gravity
+  movements.allowParkour = false  // Disable parkour to prevent floating
   movements.allowSwimming = true  // Allow swimming through water
   movements.infiniteLiquidDropdown = true  // Allow infinite falling through liquids
 
@@ -210,6 +210,8 @@ bot.once('spawn', () => {
   movements.blocksToAvoid.add(mcData.blocksByName.lava.id)  // Avoid lava
   movements.blocksToAvoid.add(mcData.blocksByName.fire.id)  // Avoid fire
   movements.blocksToAvoid.add(mcData.blocksByName.cactus.id)  // Avoid cactus
+  
+  bot.pathfinder.setMovements(movements)
 
   // Set movement costs - make water slower, ladders faster
   movements.modifyCost = (cost, block) => {
@@ -255,7 +257,16 @@ function setupTerminal() {
 
     const say = (text) => {
       console.log(`[Bot] ${text}`)
-      try { bot.whisper(TERMINAL_TARGET, text) } catch (_) {}
+      try {
+        // Add small delay to prevent chat spam and validate message
+        setTimeout(() => {
+          if (text && typeof text === 'string' && text.length > 0 && text.length < 256 && !text.includes('\n') && !text.includes('\r')) {
+            bot.whisper(TERMINAL_TARGET, text)
+          }
+        }, 100)
+      } catch (e) {
+        console.log(`[Bot] Failed to send message: ${e.message}`)
+      }
     }
 
     if (trimmed.startsWith('!')) {

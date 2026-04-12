@@ -27,8 +27,18 @@ class CombatManager {
     }
   }
 
-  enable()  { this.enabled = true;  this.currentTarget = null; console.log('[Combat] Enabled') }
-  disable() { this.enabled = false; this.currentTarget = null; console.log('[Combat] Disabled') }
+  enable()  {
+    this.enabled = true;
+    this.currentTarget = null;
+    this.bot.pathfinder.setGoal(null); // Clear any goals when enabling
+    console.log('[Combat] Enabled')
+  }
+  disable() {
+    this.enabled = false;
+    this.currentTarget = null;
+    this.bot.pathfinder.setGoal(null); // Clear any goals when disabling
+    console.log('[Combat] Disabled')
+  }
 
   // Call before a navigation command; call release() when done
   lock()    { this.navLock = true  }
@@ -60,7 +70,6 @@ class CombatManager {
         console.log('[Combat] Target gone, standing down')
         this.currentTarget = null
         this.bot.pathfinder.setGoal(null)
-        this.bot.movement.stop() // Stop movement when no target
       }
       return
     }
@@ -68,6 +77,8 @@ class CombatManager {
     if (this.currentTarget !== target) {
       console.log(`[Combat] Engaging ${target.name}`)
       this.currentTarget = target
+      // Clear any existing goals when switching targets
+      this.bot.pathfinder.setGoal(null)
     }
 
     const dist = this.bot.entity.position.distanceTo(target.position)
@@ -77,11 +88,17 @@ class CombatManager {
       await this.bot.lookAt(target.position.offset(0, target.height * 0.5, 0))
       this.bot.attack(target)
     } else {
+      // Check if bot is floating (no block below)
+      const blockBelow = this.bot.blockAt(this.bot.entity.position.offset(0, -1, 0))
+      if (!blockBelow || blockBelow.name === 'air') {
+        // Bot is floating, clear goals to let it fall
+        this.bot.pathfinder.setGoal(null)
+        return
+      }
+
       // Chase — use setGoal (non-blocking) so we don't await and block the tick
       try {
         this.bot.pathfinder.setGoal(new goals.GoalFollow(target, this.attackRange - 0.5), true)
-        // Sprint when chasing enemies for more aggressive combat
-        this.bot.movement.setMovement('sprint')
       } catch (_) {}
     }
   }
