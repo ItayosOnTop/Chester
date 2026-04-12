@@ -1,4 +1,4 @@
-// index.js — Minecraft 1.21.1 storage & utility bot
+// index.js — Minecraft 1.21.11 storage & utility bot
 const mineflayer = require('mineflayer')
 const { pathfinder, Movements } = require('mineflayer-pathfinder')
 const armorManager = require('mineflayer-armor-manager')
@@ -12,9 +12,9 @@ const NavigationManager = require('./navigation')
 // Edit these or use environment variables
 const BOT_OPTIONS = {
   host: process.env.MC_HOST || 'localhost',
-  port: parseInt(process.env.MC_PORT || '25565'),
-  username: process.env.MC_USERNAME || 'StorageBot',
-  version: '1.21.1',
+  port: parseInt(process.env.MC_PORT || '8272'),
+  username: process.env.MC_USERNAME || 'Chester',
+  version: '1.21.11',
   auth: process.env.MC_AUTH || 'offline', // use 'microsoft' for online-mode servers
 }
 

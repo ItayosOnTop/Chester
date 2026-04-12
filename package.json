@@ -10,7 +10,9 @@
     "mineflayer": "^4.23.0",
     "mineflayer-pathfinder": "^2.4.5",
     "mineflayer-auto-eat": "^5.0.3",
-    "mineflayer-armor-manager": "^2.0.3",
+    "mineflayer-armor-manager": "^2.0.1",
     "vec3": "^0.1.10"
-  }
+  },
+  "author": "",
+  "license": "ISC"
 }

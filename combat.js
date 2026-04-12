@@ -96,7 +96,8 @@ class CombatManager {
   }
 
   async _equipBestWeapon() {
-    const weapons = ['netherite_sword', 'diamond_sword', 'iron_sword', 'stone_sword', 'wooden_sword', 'golden_sword']
+    const weapons = ['netherite_sword', 'diamond_sword', 'iron_sword', 'stone_sword', 'wooden_sword', 'golden_sword',
+                     'netherite_spear', 'diamond_spear', 'iron_spear', 'copper_spear', 'stone_spear', 'wooden_spear']
     for (const weapon of weapons) {
       const item = this.bot.inventory.items().find(i => i.name === weapon)
       if (item) {
