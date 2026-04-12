@@ -59,6 +59,8 @@ class CombatManager {
       if (this.currentTarget) {
         console.log('[Combat] Target gone, standing down')
         this.currentTarget = null
+        this.bot.pathfinder.setGoal(null)
+        this.bot.movement.stop() // Stop movement when no target
       }
       return
     }
@@ -78,6 +80,8 @@ class CombatManager {
       // Chase — use setGoal (non-blocking) so we don't await and block the tick
       try {
         this.bot.pathfinder.setGoal(new goals.GoalFollow(target, this.attackRange - 0.5), true)
+        // Sprint when chasing enemies for more aggressive combat
+        this.bot.movement.setMovement('sprint')
       } catch (_) {}
     }
   }

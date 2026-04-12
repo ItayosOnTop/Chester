@@ -1,10 +1,11 @@
 // index.js — Minecraft 1.21.11 storage & utility bot
 const mineflayer = require('mineflayer')
 const { pathfinder, Movements } = require('mineflayer-pathfinder')
+const movement = require('mineflayer-movement')
 const readline = require('readline')
 const config = require('./chests.json')
-const ChestManager = require('./chestManager')
-const CombatManager = require('./combat')
+const ChestManager = require('../chestManager')
+const CombatManager = require('../combat')
 const NavigationManager = require('./navigation')
 
 // ─── Bot connection settings ──────────────────────────────────────────────────
@@ -23,6 +24,7 @@ console.log(`Connecting to ${BOT_OPTIONS.host}:${BOT_OPTIONS.port} as ${BOT_OPTI
 
 const bot = mineflayer.createBot(BOT_OPTIONS)
 bot.loadPlugin(pathfinder)
+bot.loadPlugin(movement)
 
 let chestMgr, combatMgr, navMgr
 
@@ -187,9 +189,36 @@ bot.once('spawn', () => {
 
   const mcData = require('minecraft-data')(bot.version)
   const movements = new Movements(bot, mcData)
+
+  // Enhanced movement configuration for better pathfinding
   movements.allowSprinting = true
-  movements.canDig = false
-  movements.maxDropDown = 256 // allow falling any distance
+  movements.canDig = true  // Allow digging through blocks for better paths
+  movements.canPlaceOn = true  // Allow placing blocks to create bridges/paths
+  movements.maxDropDown = 256  // Allow falling any distance
+  movements.allow1by1towers = true  // Allow building 1x1 towers to reach higher places
+  movements.allowFreeMotion = true  // Allow free motion in air (for parkour)
+  movements.allowParkour = true  // Enable parkour movements
+  movements.allowSwimming = true  // Allow swimming through water
+  movements.infiniteLiquidDropdown = true  // Allow infinite falling through liquids
+
+  // Configure block costs for smarter pathfinding
+  movements.blocksCantBreak.add(mcData.blocksByName.bedrock.id)  // Never break bedrock
+  movements.blocksCantBreak.add(mcData.blocksByName.obsidian.id)  // Never break obsidian
+  movements.blocksCantBreak.add(mcData.blocksByName.ancient_debris.id)  // Never break ancient debris
+
+  // Allow breaking common blocks for pathfinding
+  movements.blocksToAvoid.add(mcData.blocksByName.lava.id)  // Avoid lava
+  movements.blocksToAvoid.add(mcData.blocksByName.fire.id)  // Avoid fire
+  movements.blocksToAvoid.add(mcData.blocksByName.cactus.id)  // Avoid cactus
+
+  // Set movement costs - make water slower, ladders faster
+  movements.modifyCost = (cost, block) => {
+    if (block.name.includes('water')) return cost * 2  // Water is slower
+    if (block.name.includes('lava')) return cost * 10  // Avoid lava
+    if (block.name === 'ladder' || block.name === 'vine') return cost * 0.5  // Ladders/vines are faster
+    return cost
+  }
+
   bot.pathfinder.setMovements(movements)
 
   chestMgr = new ChestManager(bot, config)
