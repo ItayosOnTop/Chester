@@ -1,4 +1,5 @@
 const { goals, GoalBlock } = require('mineflayer-pathfinder');
+const { Vec3 } = require('vec3');
 const fs = require('fs');
 const path = require('path');
 
@@ -17,9 +18,7 @@ class StorageManager {
     if (fs.existsSync(DATA_FILE)) {
       try {
         this.chestMap = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-        console.log(`[Storage] Loaded ${Object.keys(this.chestMap).length} chests from disk.`);
-      } catch (e) {
-        console.error('[Storage] Failed to load chest data:', e.message);
+      } catch {
         this.chestMap = {};
       }
     }
@@ -36,487 +35,178 @@ class StorageManager {
   // ─── Movement ─────────────────────────────────────────────────────────────
 
   async goTo(pos) {
+    const vec = new Vec3(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z));
+    const currentPos = this.bot.entity.position;
+    const dist = currentPos.distanceTo(vec);
+    
+    console.log(`[Pathfinder] Moving from ${currentPos.x.toFixed(1)},${currentPos.y.toFixed(1)},${currentPos.z.toFixed(1)} to ${vec.x},${vec.y},${vec.z} (distance: ${dist.toFixed(2)})`);
+    
+    // If already close, resolve immediately
+    if (dist < 5) {
+      console.log(`[Pathfinder] Already close enough (${dist.toFixed(2)} < 5)`);
+      return Promise.resolve();
+    }
+    
     return new Promise((resolve, reject) => {
-      const goal = new GoalBlock(
-        Math.floor(pos.x),
-        Math.floor(pos.y),
-        Math.floor(pos.z)
-      );
-      this.bot.pathfinder.setGoal(goal);
+      try {
+        const goal = new GoalBlock(vec.x, vec.y, vec.z);
+        console.log(`[Pathfinder] Setting goal: ${vec.x},${vec.y},${vec.z}`);
+        this.bot.pathfinder.setGoal(goal);
+      } catch (e) {
+        console.error(`[Pathfinder] Error setting goal:`, e.message);
+        reject(new Error(`Failed to set goal: ${e.message}`));
+        return;
+      }
 
-      const onGoalReached = () => {
+      let eventFired = false;
+      const cleanup = () => {
+        eventFired = true;
+        this.bot.pathfinder.removeListener('goal_reached', onGoal);
+        this.bot.pathfinder.removeListener('path_stop', onStop);
+        clearTimeout(timeoutId);
+      };
+
+      const onGoal = () => {
+        console.log(`[Pathfinder] goal_reached event fired`);
         cleanup();
         resolve();
       };
-      const onPathStopped = (reason) => {
+
+      const onStop = (reason) => {
+        console.log(`[Pathfinder] path_stop event fired: ${reason}`);
         cleanup();
-        // treat 'noPath' as partial success if close enough
-        const dist = this.bot.entity.position.distanceTo(pos);
-        if (dist < 4) resolve();
-        else reject(new Error(`Cannot reach ${pos.x},${pos.y},${pos.z}: ${reason}`));
+        const actualDist = this.bot.entity.position.distanceTo(vec);
+        console.log(`[Pathfinder] Distance after stop: ${actualDist.toFixed(2)}`);
+        if (actualDist < 5) resolve();
+        else reject(new Error(`Cannot reach: ${reason} (dist: ${actualDist.toFixed(2)})`));
       };
 
-      function cleanup() {
-        this.bot.pathfinder.removeListener('goal_reached', onGoalReached);
-        this.bot.pathfinder.removeListener('path_stop', onPathStopped);
-      }
-      cleanup = cleanup.bind(this);
+      const timeoutId = setTimeout(() => {
+        if (!eventFired) {
+          console.log(`[Pathfinder] TIMEOUT - no events fired`);
+          cleanup();
+          const actualDist = this.bot.entity.position.distanceTo(vec);
+          reject(new Error(`Path timeout (dist: ${actualDist.toFixed(2)})`));
+        }
+      }, 20000);
 
-      this.bot.pathfinder.once('goal_reached', onGoalReached);
-      this.bot.pathfinder.once('path_stop', onPathStopped);
+      console.log(`[Pathfinder] Waiting for events...`);
+      this.bot.pathfinder.once('goal_reached', onGoal);
+      this.bot.pathfinder.once('path_stop', onStop);
     });
   }
 
   async moveNearBlock(pos) {
-    // Stand adjacent to the chest (within 3 blocks)
+    const base = new Vec3(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z));
     const offsets = [
-      { x: 1, y: 0, z: 0 }, { x: -1, y: 0, z: 0 },
-      { x: 0, y: 0, z: 1 }, { x: 0, y: 0, z: -1 },
-      { x: 0, y: 1, z: 0 },
+      new Vec3(1,0,0), new Vec3(-1,0,0),
+      new Vec3(0,0,1), new Vec3(0,0,-1),
+      new Vec3(0,1,0), new Vec3(0,-1,0),
+      new Vec3(2,0,0), new Vec3(-2,0,0),
+      new Vec3(0,0,2), new Vec3(0,0,-2)
     ];
-    for (const off of offsets) {
-      const target = {
-        x: Math.floor(pos.x) + off.x,
-        y: Math.floor(pos.y) + off.y,
-        z: Math.floor(pos.z) + off.z,
-      };
+
+    for (let i = 0; i < offsets.length; i++) {
+      const off = offsets[i];
       try {
+        const target = base.plus(off);
         await this.goTo(target);
         return;
-      } catch (_) {}
+      } catch (e) {
+        if (i < offsets.length - 1) {
+          await new Promise(r => setTimeout(r, 200));
+        }
+      }
     }
-    throw new Error(`Cannot navigate near chest at ${pos.x},${pos.y},${pos.z}`);
+    throw new Error('Cannot reach chest');
   }
 
   // ─── Chest Interaction ────────────────────────────────────────────────────
 
   async openChestAt(pos) {
-    const block = this.bot.blockAt(pos);
-    if (!block) throw new Error('No block found at position');
+    const vec = new Vec3(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z));
+    const block = this.bot.blockAt(vec);
+    if (!block) throw new Error('Block not found at position');
 
-    await this.moveNearBlock(pos);
-    await this.bot.lookAt(pos.offset(0.5, 0.5, 0.5), true);
+    try {
+      await this.moveNearBlock(vec);
+    } catch (e) {
+      throw new Error(`Cannot move to chest: ${e.message}`);
+    }
 
-    const chest = await this.bot.openChest(block);
-    return chest;
+    try {
+      await this.bot.lookAt(vec.offset(0.5, 0.5, 0.5));
+    } catch (e) {
+      throw new Error(`Cannot look at chest: ${e.message}`);
+    }
+
+    try {
+      return await this.bot.openChest(block);
+    } catch (e) {
+      throw new Error(`Cannot open chest: ${e.message}`);
+    }
   }
 
   async closeChest(chest) {
-    try {
-      chest.close();
-    } catch (_) {}
-    await this.sleep(200);
-  }
-
-  sleep(ms) {
-    return new Promise(r => setTimeout(r, ms));
+    try { chest.close(); } catch {}
+    await new Promise(r => setTimeout(r, 200));
   }
 
   // ─── Scanning ─────────────────────────────────────────────────────────────
 
   async scanArea(min, max) {
-    this.bot.chat(`Scanning area from ${min.x},${min.y},${min.z} to ${max.x},${max.y},${max.z}...`);
-
-    const minX = Math.min(min.x, max.x);
-    const minY = Math.min(min.y, max.y);
-    const minZ = Math.min(min.z, max.z);
-    const maxX = Math.max(min.x, max.x);
-    const maxY = Math.max(min.y, max.y);
-    const maxZ = Math.max(min.z, max.z);
+    min = new Vec3(min.x, min.y, min.z);
+    max = new Vec3(max.x, max.y, max.z);
 
     const chestBlocks = [];
-    const visited = new Set();
 
-    for (let x = minX; x <= maxX; x++) {
-      for (let y = minY; y <= maxY; y++) {
-        for (let z = minZ; z <= maxZ; z++) {
-          const block = this.bot.blockAt({ x, y, z });
+    for (let x = Math.min(min.x,max.x); x <= Math.max(min.x,max.x); x++) {
+      for (let y = Math.min(min.y,max.y); y <= Math.max(min.y,max.y); y++) {
+        for (let z = Math.min(min.z,max.z); z <= Math.max(min.z,max.z); z++) {
+          const pos = new Vec3(x,y,z);
+          const block = this.bot.blockAt(pos);
           if (!block) continue;
           if (!block.name.includes('chest') && !block.name.includes('barrel')) continue;
 
-          // Avoid double-counting double chests
-          const key = `${x},${y},${z}`;
-          if (visited.has(key)) continue;
-          visited.add(key);
-
-          // For double chests, also mark the partner
-          const props = block.getProperties ? block.getProperties() : {};
-          if (props.type === 'left' || props.type === 'right') {
-            const partner = this.getDoubleChestPartner(block, props);
-            if (partner) visited.add(`${partner.x},${partner.y},${partner.z}`);
-          }
-
-          chestBlocks.push({ x, y, z });
+          chestBlocks.push(pos);
         }
       }
     }
 
-    this.bot.chat(`Found ${chestBlocks.length} chest(s). Scanning contents...`);
-
-    let scanned = 0;
     for (const pos of chestBlocks) {
       try {
         await this.scanChest(pos);
-        scanned++;
-        if (scanned % 5 === 0) {
-          this.bot.chat(`Progress: ${scanned}/${chestBlocks.length} chests scanned.`);
-        }
-      } catch (err) {
-        console.error(`[Storage] Failed to scan chest at ${pos.x},${pos.y},${pos.z}:`, err.message);
-        this.bot.chat(`Warning: Could not scan chest at ${pos.x},${pos.y},${pos.z}`);
+      } catch (e) {
+        console.error(`[Storage] Chest scan error at ${pos.x},${pos.y},${pos.z}:`, e.message);
+        this.bot.chat(`Failed chest ${pos.x},${pos.y},${pos.z}`);
       }
-      await this.sleep(300);
     }
 
     this.saveData();
-    this.bot.chat(`Scan complete! ${scanned} chests catalogued. Use !listchests to view.`);
-  }
-
-  getDoubleChestPartner(block, props) {
-    const p = block.position;
-    const facing = props.facing;
-    const type = props.type;
-
-    const faceMap = {
-      north: { left: { x: 1, z: 0 }, right: { x: -1, z: 0 } },
-      south: { left: { x: -1, z: 0 }, right: { x: 1, z: 0 } },
-      east:  { left: { x: 0, z: -1 }, right: { x: 0, z: 1 } },
-      west:  { left: { x: 0, z: 1 }, right: { x: 0, z: -1 } },
-    };
-
-    if (!faceMap[facing]) return null;
-    const dir = type === 'left' ? faceMap[facing].right : faceMap[facing].left;
-    return { x: p.x + dir.x, y: p.y, z: p.z + dir.z };
+    this.bot.chat('Scan done');
   }
 
   async scanChest(pos) {
-    const vecPos = this.bot.blockAt(pos)?.position || pos;
-    const chest = await this.openChestAt(vecPos);
-
-    const items = {};
-    for (const item of chest.items()) {
-      const name = item.name;
-      items[name] = (items[name] || 0) + item.count;
-    }
-
-    await this.closeChest(chest);
-
-    const categories = this.categorizeItems(Object.keys(items));
-    const key = this.posKey(vecPos);
-
-    this.chestMap[key] = {
-      pos: { x: Math.floor(vecPos.x), y: Math.floor(vecPos.y), z: Math.floor(vecPos.z) },
-      categories,
-      items,
-      lastScanned: new Date().toISOString(),
-    };
-
-    console.log(`[Storage] Scanned chest at ${key}: ${Object.keys(items).length} item types, categories: ${categories.join(', ')}`);
-  }
-
-  categorizeItems(itemNames) {
-    const categories = new Set();
-
-    const rules = [
-      { pattern: /log$|log_/, category: 'logs' },
-      { pattern: /plank/, category: 'planks' },
-      { pattern: /stone|cobblestone|granite|diorite|andesite|deepslate|tuff/, category: 'stone' },
-      { pattern: /sand$|gravel|dirt|clay|mud|soul_sand|soul_soil/, category: 'terrain' },
-      { pattern: /ore$|raw_/, category: 'ores' },
-      { pattern: /ingot|nugget/, category: 'metals' },
-      { pattern: /diamond|emerald|amethyst|quartz/, category: 'gems' },
-      { pattern: /sword|axe|pickaxe|shovel|hoe|bow|crossbow|trident|shield/, category: 'tools_weapons' },
-      { pattern: /helmet|chestplate|leggings|boots|armor/, category: 'armor' },
-      { pattern: /food|bread|carrot|potato|apple|meat|fish|cookie|cake|pie|stew|soup/, category: 'food' },
-      { pattern: /seed|wheat|crop|harvest/, category: 'farming' },
-      { pattern: /potion|splash|lingering/, category: 'potions' },
-      { pattern: /redstone|comparator|repeater|observer|piston|hopper|dropper|dispenser|lever|button|pressure/, category: 'redstone' },
-      { pattern: /wool|carpet|banner|bed/, category: 'decoration' },
-      { pattern: /glass|pane/, category: 'glass' },
-      { pattern: /torch|lantern|lamp|light/, category: 'lighting' },
-      { pattern: /book|paper|map|compass|clock|knowledge/, category: 'misc_items' },
-      { pattern: /chest|barrel|shulker|container/, category: 'storage' },
-      { pattern: /mob|spawn|egg/, category: 'mob_items' },
-      { pattern: /slime|string|feather|leather|bone|gunpowder|blaze|ender|pearl|scale/, category: 'mob_drops' },
-    ];
-
-    for (const itemName of itemNames) {
-      let matched = false;
-      for (const rule of rules) {
-        if (rule.pattern.test(itemName)) {
-          categories.add(rule.category);
-          matched = true;
-          break;
-        }
-      }
-      if (!matched) categories.add('misc');
-    }
-
-    return [...categories];
-  }
-
-  // ─── Sorting ──────────────────────────────────────────────────────────────
-
-  /**
-   * Sort inventory: for each item in bot's inventory, find a matching chest and deposit.
-   */
-  async sortInventory() {
-    this.bot.chat('Starting sort: scanning my inventory...');
-    const invItems = this.bot.inventory.items();
-
-    if (invItems.length === 0) {
-      this.bot.chat('My inventory is empty, nothing to sort!');
-      return;
-    }
-
-    this.bot.chat(`I have ${invItems.length} item stack(s) to sort.`);
-    let sorted = 0;
-    let unsorted = [];
-
-    for (const item of invItems) {
-      const target = this.findBestChestForItem(item.name);
-      if (!target) {
-        unsorted.push(item.name);
-        continue;
-      }
-
-      try {
-        await this.depositItem(item, target);
-        sorted++;
-      } catch (err) {
-        console.error(`[Storage] Failed to deposit ${item.name}:`, err.message);
-        this.bot.chat(`Failed to deposit ${item.name}: ${err.message}`);
-      }
-
-      await this.sleep(400);
-    }
-
-    this.saveData();
-
-    if (unsorted.length > 0) {
-      this.bot.chat(`Sorted ${sorted} stacks! No matching chest for: ${[...new Set(unsorted)].join(', ')}`);
-    } else {
-      this.bot.chat(`All ${sorted} stacks sorted successfully!`);
-    }
-  }
-
-  /**
-   * Sort a specific chest: open it, take items, then route them to correct chests.
-   */
-  async sortChest(pos) {
-    this.bot.chat(`Sorting chest at ${pos.x},${pos.y},${pos.z}...`);
-
-    let chest;
+    const vec = new Vec3(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z));
+    
     try {
-      chest = await this.openChestAt(pos);
-    } catch (err) {
-      this.bot.chat(`Cannot open chest: ${err.message}`);
-      return;
-    }
+      const chest = await this.openChestAt(vec);
 
-    const itemsInChest = chest.items();
-    if (itemsInChest.length === 0) {
-      this.bot.chat('Chest is already empty!');
+      const items = {};
+      for (const item of chest.items()) {
+        items[item.name] = (items[item.name] || 0) + item.count;
+      }
+
       await this.closeChest(chest);
-      return;
+
+      const key = this.posKey(vec);
+      this.chestMap[key] = {
+        pos: { x: vec.x, y: vec.y, z: vec.z },
+        items
+      };
+    } catch (e) {
+      throw new Error(`Failed to scan chest at ${vec.x},${vec.y},${vec.z}: ${e.message}`);
     }
-
-    // Withdraw all items into bot inventory
-    for (const item of itemsInChest) {
-      try {
-        await chest.withdraw(item.type, item.metadata, item.count);
-        await this.sleep(100);
-      } catch (err) {
-        console.error(`[Storage] Withdraw error:`, err.message);
-      }
-    }
-
-    await this.closeChest(chest);
-    this.bot.chat(`Picked up ${this.bot.inventory.items().length} stacks. Now sorting...`);
-
-    await this.sortInventory();
-  }
-
-  findBestChestForItem(itemName) {
-    const itemCategories = this.categorizeItems([itemName]);
-    let bestChest = null;
-    let bestScore = -1;
-
-    for (const [key, data] of Object.entries(this.chestMap)) {
-      // Score: +10 for exact item match, +5 for category match
-      let score = 0;
-
-      if (data.items && data.items[itemName]) score += 10;
-
-      for (const cat of itemCategories) {
-        if (data.categories.includes(cat)) score += 5;
-      }
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestChest = data;
-      }
-    }
-
-    return bestScore > 0 ? bestChest : null;
-  }
-
-  async depositItem(invItem, chestData) {
-    const chestBlock = this.bot.blockAt(chestData.pos);
-    if (!chestBlock) throw new Error('Chest block not found in world');
-
-    const chest = await this.openChestAt(chestData.pos);
-
-    try {
-      // Find the item in inventory again (position may have shifted)
-      const item = this.bot.inventory.items().find(i => i.name === invItem.name);
-      if (!item) {
-        await this.closeChest(chest);
-        return;
-      }
-
-      await chest.deposit(item.type, item.metadata, item.count);
-
-      // Update our cache
-      const key = this.posKey(chestData.pos);
-      if (this.chestMap[key]) {
-        this.chestMap[key].items[item.name] = (this.chestMap[key].items[item.name] || 0) + item.count;
-      }
-    } finally {
-      await this.closeChest(chest);
-    }
-  }
-
-  // ─── Fetching ─────────────────────────────────────────────────────────────
-
-  async fetchItem(itemName, count = 1) {
-    this.bot.chat(`Fetching ${count}x ${itemName}...`);
-
-    const sources = this.findChestsWithItem(itemName);
-    if (sources.length === 0) {
-      this.bot.chat(`No chest found containing ${itemName}!`);
-      return;
-    }
-
-    let remaining = count;
-    let fetched = 0;
-
-    for (const chestData of sources) {
-      if (remaining <= 0) break;
-
-      const available = chestData.items[itemName] || 0;
-      const toFetch = Math.min(available, remaining);
-
-      try {
-        const chest = await this.openChestAt(chestData.pos);
-
-        const mcData = require('minecraft-data')(this.bot.version);
-        const itemType = mcData.itemsByName[itemName];
-        if (!itemType) {
-          await this.closeChest(chest);
-          this.bot.chat(`Unknown item: ${itemName}`);
-          return;
-        }
-
-        await chest.withdraw(itemType.id, null, toFetch);
-        fetched += toFetch;
-        remaining -= toFetch;
-
-        // Update cache
-        const key = this.posKey(chestData.pos);
-        if (this.chestMap[key]) {
-          this.chestMap[key].items[itemName] = Math.max(0, available - toFetch);
-          if (this.chestMap[key].items[itemName] === 0) {
-            delete this.chestMap[key].items[itemName];
-          }
-        }
-
-        await this.closeChest(chest);
-      } catch (err) {
-        console.error(`[Storage] Fetch error:`, err.message);
-        this.bot.chat(`Error fetching from chest at ${chestData.pos.x},${chestData.pos.y},${chestData.pos.z}: ${err.message}`);
-      }
-
-      await this.sleep(400);
-    }
-
-    this.saveData();
-
-    if (fetched > 0) {
-      this.bot.chat(`Fetched ${fetched}x ${itemName}! ${remaining > 0 ? `(${remaining} not available)` : ''}`);
-    } else {
-      this.bot.chat(`Failed to fetch any ${itemName}.`);
-    }
-  }
-
-  findChestsWithItem(itemName) {
-    return Object.values(this.chestMap)
-      .filter(data => data.items && data.items[itemName] > 0)
-      .sort((a, b) => (b.items[itemName] || 0) - (a.items[itemName] || 0));
-  }
-
-  // ─── Query ────────────────────────────────────────────────────────────────
-
-  listChests() {
-    const keys = Object.keys(this.chestMap);
-    if (keys.length === 0) {
-      this.bot.chat('No chests catalogued yet. Use !scan to scan an area.');
-      return;
-    }
-
-    this.bot.chat(`=== ${keys.length} Catalogued Chest(s) ===`);
-    for (const key of keys) {
-      const data = this.chestMap[key];
-      const cats = data.categories.join(', ');
-      const itemCount = Object.keys(data.items || {}).length;
-      this.bot.chat(`[${key}] ${cats} (${itemCount} item types)`);
-    }
-  }
-
-  inspectChest(pos) {
-    const key = this.posKey(pos);
-    const data = this.chestMap[key];
-
-    if (!data) {
-      this.bot.chat(`No recorded data for chest at ${key}. Try scanning first.`);
-      return;
-    }
-
-    this.bot.chat(`=== Chest at ${key} ===`);
-    this.bot.chat(`Categories: ${data.categories.join(', ')}`);
-    this.bot.chat(`Contents (${Object.keys(data.items).length} types):`);
-
-    const entries = Object.entries(data.items || {});
-    if (entries.length === 0) {
-      this.bot.chat('  (empty)');
-      return;
-    }
-
-    // Chat is limited, send in chunks
-    const lines = entries.map(([name, count]) => `  ${name}: ${count}`);
-    for (let i = 0; i < lines.length; i += 3) {
-      this.bot.chat(lines.slice(i, i + 3).join(' | '));
-    }
-  }
-
-  findItem(itemName) {
-    const sources = this.findChestsWithItem(itemName);
-    if (sources.length === 0) {
-      this.bot.chat(`"${itemName}" not found in any catalogued chest.`);
-      return;
-    }
-
-    this.bot.chat(`Found "${itemName}" in ${sources.length} chest(s):`);
-    for (const data of sources) {
-      const { x, y, z } = data.pos;
-      this.bot.chat(`  [${x},${y},${z}] x${data.items[itemName]}`);
-    }
-  }
-
-  clearData() {
-    this.chestMap = {};
-    this.saveData();
-    this.bot.chat('Chest database cleared.');
   }
 }
 

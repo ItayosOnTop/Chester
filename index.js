@@ -2,6 +2,7 @@ const mineflayer = require('mineflayer');
 const { pathfinder, Movements } = require('mineflayer-pathfinder');
 const fs = require('fs');
 const path = require('path');
+const Vec3 = require('vec3');
 const StorageManager = require('./storageManager');
 const CommandHandler = require('./commandHandler');
 
@@ -77,6 +78,22 @@ function createBot() {
   bot.once('spawn', () => {
     console.log(`[Bot] Spawned as ${bot.username}`);
     bot.chat('Storage bot online! Type !help for commands.');
+
+    // Ensure position has floored method
+    const position = bot.entity.position;
+    const proxy = new Proxy(position, {
+      get(target, prop) {
+        if (prop === 'floored') {
+          return () => new Vec3(Math.floor(target.x), Math.floor(target.y), Math.floor(target.z));
+        }
+        return target[prop];
+      },
+      set(target, prop, value) {
+        target[prop] = value;
+        return true;
+      }
+    });
+    bot.entity.position = proxy;
 
     const mcData = require('minecraft-data')(bot.version);
     const movements = new Movements(bot, mcData);

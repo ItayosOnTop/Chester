@@ -1,3 +1,5 @@
+const Vec3 = require('vec3');
+
 class CommandHandler {
   constructor(bot, storageManager, owner, scanAreas = []) {
     this.bot = bot;
@@ -181,7 +183,7 @@ class CommandHandler {
         this.bot.chat('Coordinates must be numbers. Usage: !sort x y z');
         return;
       }
-      await this.storage.sortChest({ x, y, z });
+      await this.storage.sortChest(new Vec3(x, y, z));
     } else {
       this.bot.chat('Usage: !sort  OR  !sort x y z');
     }
@@ -213,7 +215,7 @@ class CommandHandler {
       this.bot.chat('Coordinates must be numbers.');
       return;
     }
-    this.storage.inspectChest({ x, y, z });
+    this.storage.inspectChest(new Vec3(x, y, z));
   }
 
   cmdFind(args) {
