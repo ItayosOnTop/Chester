@@ -1,133 +1,157 @@
-# Minecraft Storage Bot (1.21.1)
+# Minecraft Storage Bot 🤖📦
 
-A Mineflayer bot that manages your storage system, handles combat, tracks food and armor, and responds to chat commands from authorized players only.
-
----
-
-## Features
-
-- **Chest sorting** — deposits inventory items into their configured chests automatically
-- **Item fetching** — retrieves any item from the correct chest on demand
-- **Auto combat** — detects and attacks nearby hostile mobs, equips the best weapon automatically
-- **Auto eat** — eats food automatically when hunger drops below 14/20
-- **Auto armor** — equips the best available armor automatically
-- **Auto totem** — automatically equips totems of undying when health drops below 8/20
-- **Navigation** — follow a player, come to a player once, or go to specific coordinates
-- **Chat commands** — all features accessible through in-game chat (ItayosOnTop only)
-- **Player restrictions** — only responds to commands from player "ItayosOnTop"
+A Mineflayer-powered bot that automatically scans, sorts, and fetches items from chest storage systems.
+Only responds to commands from **ItayosOnTop**.
 
 ---
 
 ## Setup
 
-### 1. Install Node.js
-Requires Node.js 18 or later. Download from https://nodejs.org
-
-### 2. Install dependencies
+### 1. Install dependencies
 ```bash
-cd minecraft-bot
 npm install
 ```
 
-### 3. Configure the bot
+### 2. Edit `config.json`
 
-**Server connection** — edit `index.js` or set environment variables:
-```bash
-MC_HOST=your.server.ip
-MC_PORT=25565
-MC_USERNAME=StorageBot
-MC_AUTH=offline   # or 'microsoft' for online-mode servers
-```
-
-**Chest positions** — open `chests.json` and set the correct X/Y/Z coordinates for each chest in your world. Walk up to a chest in-game and press F3 to see your coordinates.
+This is the **only file you need to edit**. It controls the server connection and all scan areas:
 
 ```json
 {
-  "id": "chest_wood",
-  "label": "Wood storage",
-  "position": { "x": 100, "y": 64, "z": 200 },
-  "items": ["oak_log", "birch_log", "oak_planks"]
+  "server": {
+    "host": "localhost",
+    "port": 25565,
+    "username": "StorageBot",
+    "version": "1.20.1"
+  },
+  "owner": "ItayosOnTop",
+  "scanAreas": [
+    {
+      "name": "Main Storage",
+      "from": { "x": -100, "y": 60, "z": -100 },
+      "to":   { "x": -50,  "y": 70, "z": -50  }
+    },
+    {
+      "name": "Underground Vault",
+      "from": { "x": 200, "y": 20, "z": 300 },
+      "to":   { "x": 250, "y": 40, "z": 350 }
+    }
+  ]
 }
 ```
 
-- `id` — internal identifier (used with `!collect`)
-- `label` — friendly name shown in chat
-- `position` — block position of the chest
-- `items` — item names that belong in this chest (use Minecraft's internal names, e.g. `iron_ingot` not `Iron Ingot`)
+| Field | Description |
+|---|---|
+| `server.host` | Your server IP or hostname |
+| `server.port` | Server port (default 25565) |
+| `server.username` | The bot's Minecraft username |
+| `server.version` | Minecraft version string (e.g. `"1.20.1"`) |
+| `owner` | The only player allowed to send commands |
+| `scanAreas` | List of named areas to scan for chests |
 
-Any item not listed in any chest's `items` array goes into `defaultChest` (set to `chest_misc` by default).
+You can add as many `scanAreas` entries as you want. Each needs a `name`, a `from` coordinate, and a `to` coordinate.
 
-### 4. Start the bot
+### 3. Start the bot
 ```bash
 npm start
-# or directly:
-node index.js
 ```
 
 ---
 
-## In-game Commands
+## Commands (in-game chat)
 
-**Note:** The bot only responds to commands from the player "ItayosOnTop".
-
-All commands are typed in chat. The bot responds in the same chat.
-
+### Scanning
 | Command | Description |
 |---|---|
-| `!help` | Show all commands |
-| `!sort` | Deposit all inventory items into their correct chests |
-| `!fetch <item> [amount]` | Pull an item from its chest (default: 64) |
-| `!collect <chest_id>` | Empty a chest into the bot's inventory |
-| `!chests` | List all configured chests and their categories |
-| `!follow <player>` | Follow a player continuously |
-| `!come <player>` | Navigate to a player once |
-| `!goto <x> <y> <z>` | Navigate to coordinates |
-| `!stop` | Stop all movement |
-| `!combat on\|off` | Toggle hostile mob combat |
-| `!armor` | Manually equip the best available armor |
-| `!totem` | Manually equip a totem of undying |
-| `!status` | Show HP, food, navigation, and combat status |
-| `!inv` | Show current inventory |
+| `!areas` | List all scan areas from config.json |
+| `!scan` | Same — shows available areas |
+| `!scan <name or #>` | Scan a specific area by name or number |
+| `!scanall` | Scan every area defined in config.json |
+| `!rescan x y z` | Re-scan a single chest at specific coords |
 
-### Examples
+### Sorting & Fetching
+| Command | Description |
+|---|---|
+| `!sort` | Sort bot's current inventory into matching chests |
+| `!sort x y z` | Empty a specific chest and sort its items |
+| `!fetch <item_name> [count]` | Retrieve items from storage |
+
+### Info
+| Command | Description |
+|---|---|
+| `!find <item_name>` | Find which chest(s) contain an item |
+| `!list` | List all catalogued chests with categories |
+| `!inspect x y z` | Show detailed contents of a specific chest |
+
+### Misc
+| Command | Description |
+|---|---|
+| `!clear` | Clear the entire chest database |
+| `!come` | Bot navigates to your location |
+| `!status` | Check if bot is busy |
+| `!stop` | Cancel the current task |
+| `!help` | Show help in-game |
+
+---
+
+## Example Workflow
+
 ```
-!fetch diamond 32
-!fetch iron_ingot
-!sort
-!follow Steve
-!come Alex
-!goto 100 64 200
-!collect chest_wood
-!combat off
-!status
+ItayosOnTop: !areas
+Bot: === 2 Scan Area(s) in config.json ===
+Bot:   #1 "Main Storage"  [-100,60,-100] → [-50,70,-50]
+Bot:   #2 "Underground Vault"  [200,20,300] → [250,40,350]
+
+ItayosOnTop: !scan 1
+Bot: Starting scan of area: "Main Storage"
+Bot: Found 12 chest(s). Scanning contents...
+Bot: Scan complete! 12 chests catalogued.
+
+ItayosOnTop: !scan Underground
+Bot: Starting scan of area: "Underground Vault"
+...
+
+ItayosOnTop: !fetch oak_log 64
+Bot: Fetching 64x oak_log...
+Bot: Fetched 64x oak_log!
+
+ItayosOnTop: !sort
+Bot: Starting sort: scanning my inventory...
+Bot: All 3 stacks sorted successfully!
 ```
 
 ---
 
-## Adding / changing chests
+## File Structure
 
-Edit `chests.json` — no restart needed if you use a file watcher, otherwise restart the bot after saving.
-
-**Finding item names**: item names follow the pattern `minecraft:<name>` but the bot uses just the `<name>` part. Some common examples:
-- `oak_log`, `birch_log`, `spruce_log`
-- `iron_ingot`, `gold_ingot`, `diamond`, `emerald`
-- `cooked_beef`, `bread`, `apple`
-- `iron_sword`, `diamond_pickaxe`
-
-When in doubt, use the `/give` command in-game and check the item name format.
-
----
-
-## Hostile mobs list
-
-The bot attacks these mobs by default (configurable in `chests.json` under `combat.hostileMobs`):
-zombie, skeleton, spider, creeper, enderman, witch, pillager, vindicator, ravager, blaze, zombie_villager, husk, stray, drowned, phantom, slime, magma_cube, ghast, wither_skeleton, piglin_brute
+```
+minecraft-storage-bot/
+├── config.json       ← Edit this! Server + scan areas
+├── index.js          ← Bot entry, reads config.json
+├── storageManager.js ← Chest scanning, sorting, fetching
+├── commandHandler.js ← In-game command parser
+├── chest_data.json   ← Auto-generated chest database (do not edit)
+└── package.json
+```
 
 ---
 
-## Notes
+## Item Categories (auto-detected)
 
-- The bot will not dig blocks during navigation (`canDig: false`). Enable this in `index.js` if needed.
-- Combat is paused during chest interactions to avoid interruptions.
-- If the bot dies, combat re-enables automatically after 5 seconds.
-- For Microsoft/online-mode servers, set `MC_AUTH=microsoft` and the bot will open a browser for login on first run.
+| Category | Examples |
+|---|---|
+| `logs` | oak_log, birch_log, spruce_log |
+| `planks` | oak_planks, birch_planks |
+| `stone` | stone, cobblestone, granite, deepslate |
+| `ores` | iron_ore, coal_ore, diamond_ore |
+| `metals` | iron_ingot, gold_ingot, copper_ingot |
+| `gems` | diamond, emerald, amethyst_shard |
+| `terrain` | sand, gravel, dirt, clay |
+| `tools_weapons` | sword, pickaxe, bow, trident |
+| `armor` | helmet, chestplate, leggings, boots |
+| `food` | bread, apple, cooked_beef |
+| `redstone` | redstone, comparator, piston, hopper |
+| `potions` | potion, splash_potion |
+| `lighting` | torch, lantern |
+| `mob_drops` | string, feather, bone, blaze_rod |
+| `misc` | anything uncategorized |

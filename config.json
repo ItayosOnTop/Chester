@@ -1,0 +1,21 @@
+{
+  "server": {
+    "host": "localhost",
+    "port": 25565,
+    "username": "StorageBot",
+    "version": "1.20.1"
+  },
+  "owner": "ItayosOnTop",
+  "scanAreas": [
+    {
+      "name": "Main Storage",
+      "from": { "x": -100, "y": 60, "z": -100 },
+      "to":   { "x": -50,  "y": 70, "z": -50  }
+    },
+    {
+      "name": "Underground Vault",
+      "from": { "x": 200, "y": 20, "z": 300 },
+      "to":   { "x": 250, "y": 40, "z": 350 }
+    }
+  ]
+}
