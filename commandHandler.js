@@ -53,12 +53,24 @@ class CommandHandler {
         break;
 
       case '!follow':
+        // 1. Prevent background tasks from fighting the follow command
+        if (this.currentTask !== 'Idle' && this.currentTask !== 'Following player') {
+          return this.bot.chat(`I am busy doing: ${this.currentTask}. Use !stop first.`);
+        }
+
         if (!args[0]) return this.bot.chat('Usage: !follow <playerName>');
         const targetPlayer = this.bot.players[args[0]]?.entity;
         if (!targetPlayer) return this.bot.chat(`I cannot see ${args[0]}.`);
+        
         this.currentTask = 'Following player';
-        this.bot.pathfinder.setGoal(new goals.GoalFollow(targetPlayer, 2), true);
-        this.bot.chat(`Following ${args[0]}...`);
+        
+        // 2. Hard-brake to clear any stuck movement keys
+        this.bot.pathfinder.setGoal(null);
+        this.bot.clearControlStates();
+        
+        // 3. Increase range from 2 to 3 so it doesn't bump your hitbox and spin
+        this.bot.pathfinder.setGoal(new goals.GoalFollow(targetPlayer, 3), true);
+        this.bot.chat(`Following ${args[0]} straight away!`);
         break;
 
       case '!sethome':

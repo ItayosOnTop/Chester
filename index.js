@@ -34,11 +34,12 @@ bot.once('spawn', () => {
   console.log(`[Bot] Spawned on ${config.server.host}:${config.server.port}`);
   bot.chat('Hierarchical Storage bot online! Type !help for commands.');
 
-  const mcData = require('minecraft-data')(bot.version);
+const mcData = require('minecraft-data')(bot.version);
   const movements = new Movements(bot, mcData);
   movements.canDig = false;
+  movements.canPlace = false; // <--- ADD THIS to stop it from trying to build!
   bot.pathfinder.setMovements(movements);
-
+  
   // Pass the server IP so the DB knows where we are
   const serverKey = `${config.server.host}:${config.server.port}`;
   storageManager = new StorageManager(bot, serverKey, mcData);
