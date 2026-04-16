@@ -1,0 +1,129 @@
+{
+  "localhost:25565": {
+    "idk": {
+      "bounds": {
+        "min": {
+          "x": 7,
+          "y": -60,
+          "z": 10
+        },
+        "max": {
+          "x": 12,
+          "y": -60,
+          "z": 15
+        }
+      },
+      "home": null,
+      "chests": {
+        "12,-60,10": {
+          "pos": {
+            "x": 12,
+            "y": -60,
+            "z": 10
+          },
+          "type": "Empty",
+          "items": {}
+        },
+        "11,-60,10": {
+          "pos": {
+            "x": 11,
+            "y": -60,
+            "z": 10
+          },
+          "type": "Empty",
+          "items": {}
+        },
+        "10,-60,15": {
+          "pos": {
+            "x": 10,
+            "y": -60,
+            "z": 15
+          },
+          "type": "Ores & Minerals",
+          "items": {
+            "netherite_ingot": 54
+          }
+        },
+        "9,-60,15": {
+          "pos": {
+            "x": 9,
+            "y": -60,
+            "z": 15
+          },
+          "type": "Ores & Minerals",
+          "items": {
+            "netherite_ingot": 54
+          }
+        },
+        "7,-60,12": {
+          "pos": {
+            "x": 7,
+            "y": -60,
+            "z": 12
+          },
+          "type": "Building Blocks",
+          "items": {
+            "grass_block": 1149
+          }
+        },
+        "7,-60,11": {
+          "pos": {
+            "x": 7,
+            "y": -60,
+            "z": 11
+          },
+          "type": "Wood",
+          "items": {
+            "oak_log": 61,
+            "birch_log": 1100
+          }
+        },
+        "7,-60,13": {
+          "pos": {
+            "x": 7,
+            "y": -60,
+            "z": 13
+          },
+          "type": "Building Blocks",
+          "items": {
+            "grass_block": 1149
+          }
+        },
+        "7,-60,10": {
+          "pos": {
+            "x": 7,
+            "y": -60,
+            "z": 10
+          },
+          "type": "Wood",
+          "items": {
+            "oak_log": 61,
+            "birch_log": 1100
+          }
+        },
+        "7,-60,14": {
+          "pos": {
+            "x": 7,
+            "y": -60,
+            "z": 14
+          },
+          "type": "Building Blocks",
+          "items": {
+            "chest": 40
+          }
+        },
+        "7,-60,15": {
+          "pos": {
+            "x": 7,
+            "y": -60,
+            "z": 15
+          },
+          "type": "Building Blocks",
+          "items": {
+            "chest": 40
+          }
+        }
+      }
+    }
+  }
+}

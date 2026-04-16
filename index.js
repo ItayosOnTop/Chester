@@ -5,15 +5,15 @@ const path = require('path');
 const StorageManager = require('./storageManager');
 const CommandHandler = require('./commandHandler');
 
-// Default config if none exists
+// config.json is ONLY for login details now.
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 if (!fs.existsSync(CONFIG_PATH)) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify({
     server: { host: "localhost", port: 25565, username: "Chester", version: "1.20.1" },
-    owner: "ItayosOnTop",
-    home: null,
-    baseArea: null
+    owner: "ItayosOnTop"
   }, null, 2));
+  console.log('Created config.json. Please set your IP and restart.');
+  process.exit(1);
 }
 
 const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
@@ -31,21 +31,18 @@ let commandHandler;
 let storageManager;
 
 bot.once('spawn', () => {
-  console.log(`[Bot] Spawned as ${bot.username}`);
-  bot.chat('Storage bot online! Type !help for commands.');
+  console.log(`[Bot] Spawned on ${config.server.host}:${config.server.port}`);
+  bot.chat('Hierarchical Storage bot online! Type !help for commands.');
 
   const mcData = require('minecraft-data')(bot.version);
   const movements = new Movements(bot, mcData);
   movements.canDig = false;
   bot.pathfinder.setMovements(movements);
 
-  storageManager = new StorageManager(bot);
+  // Pass the server IP so the DB knows where we are
+  const serverKey = `${config.server.host}:${config.server.port}`;
+  storageManager = new StorageManager(bot, serverKey, mcData);
   commandHandler = new CommandHandler(bot, storageManager, config.owner);
-
-  // If a home is set, go to it on startup
-  if (config.home) {
-    setTimeout(() => storageManager.goHome(), 2000);
-  }
 });
 
 bot.on('chat', (username, message) => {
