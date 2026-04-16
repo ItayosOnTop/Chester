@@ -53,7 +53,7 @@
     },
     "type": "Misc / Mixed",
     "items": {
-      "chest": 45
+      "chest": 40
     }
   },
   "10,-59,15": {
@@ -106,10 +106,8 @@
       "y": -60,
       "z": 15
     },
-    "type": "Ores & Valuables",
-    "items": {
-      "netherite_ingot": 56
-    }
+    "type": "Empty Chest",
+    "items": {}
   },
   "9,-59,15": {
     "pos": {
@@ -127,7 +125,7 @@
     },
     "type": "Ores & Valuables",
     "items": {
-      "netherite_ingot": 65
+      "netherite_ingot": 55
     }
   },
   "11,-60,10": {

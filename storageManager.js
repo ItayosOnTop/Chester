@@ -4,23 +4,19 @@ const { Vec3 } = require('vec3');
 const { goals } = require('mineflayer-pathfinder');
 
 const DATA_FILE = path.join(__dirname, 'chest_data.json');
+const CONFIG_FILE = path.join(__dirname, 'config.json');
 
 class StorageManager {
   constructor(bot) {
     this.bot = bot;
-    this.chestMap = {}; // { "x,y,z": { pos, type: "Logs", items: {name: count} } }
+    this.chestMap = {}; // { "x,y,z": { pos, type, items: {name: count} } }
     this.loadData();
   }
 
-  // ─── Persistence ──────────────────────────────────────────────────────────
-
   loadData() {
     if (fs.existsSync(DATA_FILE)) {
-      try {
-        this.chestMap = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-      } catch {
-        this.chestMap = {};
-      }
+      try { this.chestMap = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } 
+      catch { this.chestMap = {}; }
     }
   }
 
@@ -32,57 +28,48 @@ class StorageManager {
     return `${Math.floor(pos.x)},${Math.floor(pos.y)},${Math.floor(pos.z)}`;
   }
 
-  clearData() {
-    this.chestMap = {};
-    this.saveData();
-    this.bot.chat('Chest database cleared.');
-  }
+  // ─── Core Movement ────────────────────────────────────────────────────────
 
-  // ─── Movement (Anti-Spinning) ─────────────────────────────────────────────
-
-  async goTo(pos) {
+  async goTo(pos, distance = 3) {
     const vec = new Vec3(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z));
     const center = vec.offset(0.5, 0.5, 0.5);
     
-    // Check if we are already within a safe reach distance (3.5 blocks)
-    if (this.bot.entity.position.distanceTo(center) <= 3.5) {
+    if (this.bot.entity.position.distanceTo(center) <= distance + 0.5) {
       this.bot.pathfinder.setGoal(null);
-      this.bot.clearControlStates(); // Force release all movement keys
+      this.bot.clearControlStates();
       return; 
     }
 
-    console.log(`[Movement] Walking to ${vec.x},${vec.y},${vec.z}...`);
-    
     try {
-      // Use a distance of 3 so the bot doesn't bump into the chest and spin
-      const goal = new goals.GoalNear(vec.x, vec.y, vec.z, 3);
-      await this.bot.pathfinder.goto(goal);
+      await this.bot.pathfinder.goto(new goals.GoalNear(vec.x, vec.y, vec.z, distance));
     } catch (err) {
-      console.log(`[Movement] Path resolved or interrupted: ${err.message}`);
+      console.log(`[Movement] Interrupted: ${err.message}`);
     } finally {
-      // THE FIX: Always kill movement and clear keyboard states when done!
       this.bot.pathfinder.setGoal(null);
       this.bot.clearControlStates();
       await this.bot.waitForTicks(5);
     }
   }
 
-  // ─── Chest Interaction ────────────────────────────────────────────────────
+  async goHome() {
+    const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    if (!config.home) return;
+    
+    console.log('[Storage] Returning to home position...');
+    await this.goTo(config.home, 1);
+  }
+
+  // ─── Chest Interactions ───────────────────────────────────────────────────
 
   async openChestAt(pos) {
     const vec = new Vec3(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z));
     const block = this.bot.blockAt(vec);
-    
     if (!block) throw new Error('Block not loaded');
 
     await this.goTo(vec);
-    
-    // Look at the exact center of the chest
     await this.bot.lookAt(vec.offset(0.5, 0.5, 0.5), true);
     await this.bot.waitForTicks(5);
-
-    const chestWindow = await this.bot.openContainer(block);
-    return chestWindow;
+    return await this.bot.openContainer(block);
   }
 
   async closeChest(chestWindow) {
@@ -92,243 +79,191 @@ class StorageManager {
     }
   }
 
-  // ─── AI Chest Categorization ──────────────────────────────────────────────
-
   categorizeChest(items) {
-    if (Object.keys(items).length === 0) return "Empty Chest";
-
+    if (Object.keys(items).length === 0) return "Empty";
     const categories = {
-      "Logs & Wood":["log", "planks", "wood", "slab", "stair", "fence", "door"],
-      "Stone & Earth":["stone", "dirt", "cobblestone", "gravel", "sand", "granite", "diorite", "andesite", "deepslate", "tuff"],
-      "Ores & Valuables":["iron", "gold", "diamond", "emerald", "coal", "lapis", "redstone", "copper", "netherite", "raw"],
-      "Food & Farming":["apple", "bread", "beef", "porkchop", "potato", "carrot", "wheat", "seed", "melon", "pumpkin", "sugar"],
-      "Tools & Armor":["sword", "pickaxe", "axe", "shovel", "hoe", "helmet", "chestplate", "leggings", "boots", "shield"],
-      "Mob Loot":["rotten_flesh", "bone", "gunpowder", "string", "spider_eye", "ender_pearl", "slime_ball"]
+      "Wood": ["log", "planks", "wood", "slab", "stair", "fence"],
+      "Stone":["stone", "dirt", "cobblestone", "gravel", "sand", "deepslate"],
+      "Ores":["iron", "gold", "diamond", "emerald", "coal", "lapis", "redstone", "copper"],
+      "Food":["apple", "bread", "beef", "porkchop", "potato", "carrot", "wheat"],
+      "Gear":["sword", "pickaxe", "axe", "shovel", "helmet", "chestplate", "leggings", "boots"]
     };
-
-    let bestCategory = "Misc / Mixed";
-    let maxScore = 0;
-
-    // Calculate which category has the highest number of items in the chest
+    let best = "Misc";
+    let max = 0;
     for (const [catName, keywords] of Object.entries(categories)) {
       let score = 0;
-      for (const [itemName, count] of Object.entries(items)) {
-        if (keywords.some(kw => itemName.includes(kw))) {
-          score += count;
-        }
+      for (const itemName of Object.keys(items)) {
+        if (keywords.some(kw => itemName.includes(kw))) score += items[itemName];
       }
-      if (score > maxScore && score > 0) {
-        maxScore = score;
-        bestCategory = catName;
-      }
+      if (score > max) { max = score; best = catName; }
     }
-
-    return bestCategory;
+    return best;
   }
 
-  // ─── Scanning ─────────────────────────────────────────────────────────────
+  // ─── Base Scanning ────────────────────────────────────────────────────────
 
   async scanArea(min, max) {
     const mcData = require('minecraft-data')(this.bot.version);
-    const containerNames =['chest', 'trapped_chest', 'barrel'];
-    const containerIds = containerNames.map(n => mcData.blocksByName[n]?.id).filter(Boolean);
+    const containerIds =['chest', 'trapped_chest', 'barrel'].map(n => mcData.blocksByName[n]?.id).filter(Boolean);
 
-    // Find all chests in the loaded area
-    const blocks = this.bot.findBlocks({
-      matching: containerIds,
-      maxDistance: 64,
-      count: 5000
-    });
-
-    // Filter to ONLY chests inside the coordinates provided in config.json
-    const chestsInArea = blocks.filter(pos => 
-      pos.x >= Math.min(min.x, max.x) && pos.x <= Math.max(min.x, max.x) &&
-      pos.y >= Math.min(min.y, max.y) && pos.y <= Math.max(min.y, max.y) &&
-      pos.z >= Math.min(min.z, max.z) && pos.z <= Math.max(min.z, max.z)
+    const blocks = this.bot.findBlocks({ matching: containerIds, maxDistance: 64, count: 5000 });
+    const chests = blocks.filter(p => 
+      p.x >= Math.min(min.x, max.x) && p.x <= Math.max(min.x, max.x) &&
+      p.y >= Math.min(min.y, max.y) && p.y <= Math.max(min.y, max.y) &&
+      p.z >= Math.min(min.z, max.z) && p.z <= Math.max(min.z, max.z)
     );
 
-    if (chestsInArea.length === 0) {
-      this.bot.chat('No chests found in this area.');
+    if (chests.length === 0) {
+      this.bot.chat('No chests found in the base area.');
       return;
     }
 
-    this.bot.chat(`/msg ItayosOnTop Found ${chestsInArea.length} chests. Beginning scan...`);
-
-    // Sort chests by distance so the bot walks efficiently
-    let remainingChests = [...chestsInArea];
-
-    while (remainingChests.length > 0) {
-      remainingChests.sort((a, b) => this.bot.entity.position.distanceTo(a) - this.bot.entity.position.distanceTo(b));
-      const nextChest = remainingChests.shift(); 
-      
+    this.bot.chat(`Scanning ${chests.length} chests to update memory...`);
+    for (const pos of chests) {
+      let chestWindow;
       try {
-        await this.scanChest(nextChest);
-      } catch (err) {
-        console.error(`[Storage] Failed chest at ${nextChest.x},${nextChest.y},${nextChest.z}:`, err.message);
-      }
-    }
-
-    // Finished scanning. Save data and force bot to completely stop.
-    this.saveData();
-    this.bot.pathfinder.setGoal(null);
-    this.bot.clearControlStates();
-    
-    this.bot.chat('Scan complete! Check the JSON file. I will remember these chests now.');
-  }
-
-  async scanChest(pos) {
-    const vec = new Vec3(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z));
-    const block = this.bot.blockAt(vec);
-    
-    // Check if chest is blocked by a solid block above it
-    const blockAbove = this.bot.blockAt(vec.offset(0, 1, 0));
-    if (blockAbove && blockAbove.boundingBox === 'block' && block.name.includes('chest')) {
-        console.log(`[Scanning] Skipping chest at ${vec.x},${vec.y},${vec.z} - Blocked from above.`);
-        return;
-    }
-
-    console.log(`[Scanning] Opening chest at ${vec.x},${vec.y},${vec.z}`);
-    
-    let chestWindow;
-    try {
-      chestWindow = await this.openChestAt(vec);
-      if (!chestWindow) return;
-
-      const items = {};
-      for (const item of chestWindow.containerItems()) {
-        items[item.name] = (items[item.name] || 0) + item.count;
-      }
-
-      // Determine what kind of chest this is based on its items
-      const chestCategory = this.categorizeChest(items);
-
-      const key = this.posKey(vec);
-      this.chestMap[key] = {
-        pos: { x: vec.x, y: vec.y, z: vec.z },
-        type: chestCategory,
-        items: items
-      };
-
-      console.log(`[Scanning] Categorized as:[${chestCategory}]`);
-
-    } finally {
-      if (chestWindow) await this.closeChest(chestWindow);
-    }
-  }
-
-  // ─── Fetching & Finding (Uses Memory, No Scanning!) ───────────────────────
-
-  findItem(itemName) {
-    itemName = itemName.toLowerCase();
-    const locations =[];
-
-    // Searches the JSON file memory instantly. No walking required.
-    for (const [key, data] of Object.entries(this.chestMap)) {
-      for (const [name, count] of Object.entries(data.items)) {
-        if (name.includes(itemName)) {
-          locations.push({ pos: data.pos, type: data.type, name, count });
+        chestWindow = await this.openChestAt(pos);
+        const items = {};
+        for (const item of chestWindow.containerItems()) {
+          items[item.name] = (items[item.name] || 0) + item.count;
         }
+        this.chestMap[this.posKey(pos)] = { pos, type: this.categorizeChest(items), items };
+      } catch (err) { } 
+      finally { await this.closeChest(chestWindow); }
+    }
+    this.saveData();
+    this.bot.chat('Base area scan complete!');
+  }
+
+  // ─── Sorting Logic (!sort) ────────────────────────────────────────────────
+
+  findBestStorageChest(itemName) {
+    // 1. Find a chest that already has this item
+    for (const [key, data] of Object.entries(this.chestMap)) {
+      if (data.items[itemName]) return data.pos;
+    }
+    // 2. Find an empty chest as a fallback
+    for (const [key, data] of Object.entries(this.chestMap)) {
+      if (data.type === "Empty") return data.pos;
+    }
+    // 3. Return the very first chest in memory if nowhere else fits
+    const keys = Object.keys(this.chestMap);
+    return keys.length > 0 ? this.chestMap[keys[0]].pos : null;
+  }
+
+  async sortChest(sourcePos) {
+    const mcData = require('minecraft-data')(this.bot.version);
+    this.bot.chat('Taking items out of the drop chest...');
+    
+    // Step 1: Empty the target chest into Bot's inventory
+    let sourceChest = await this.openChestAt(sourcePos);
+    for (const item of sourceChest.containerItems()) {
+      try {
+        await sourceChest.withdraw(item.type, item.metadata, item.count);
+      } catch (e) {
+        this.bot.chat('My inventory is full! Sorting what I have so far.');
+        break;
+      }
+    }
+    await this.closeChest(sourceChest);
+
+    // Step 2: Deposit items from Bot's inventory into base area chests
+    const botItems = this.bot.inventory.items();
+    if (botItems.length === 0) {
+      this.bot.chat('No items to sort.');
+      return;
+    }
+
+    for (const item of botItems) {
+      const destPos = this.findBestStorageChest(item.name);
+      if (!destPos) {
+        this.bot.chat(`I don't have anywhere to put ${item.name}. Skipping.`);
+        continue;
+      }
+
+      let destChest;
+      try {
+        destChest = await this.openChestAt(destPos);
+        await destChest.deposit(item.type, item.metadata, item.count);
+        
+        // Update memory
+        const key = this.posKey(destPos);
+        this.chestMap[key].items[item.name] = (this.chestMap[key].items[item.name] || 0) + item.count;
+        this.chestMap[key].type = this.categorizeChest(this.chestMap[key].items);
+      } catch (e) {
+        console.error(`Failed to deposit ${item.name}: ${e.message}`);
+      } finally {
+        await this.closeChest(destChest);
+      }
+    }
+    this.saveData();
+    this.bot.chat('Finished sorting!');
+  }
+
+  // ─── Fetching Logic (!fetch) ──────────────────────────────────────────────
+
+  async fetchItemToChest(itemName, count, destPos) {
+    const mcData = require('minecraft-data')(this.bot.version);
+    let needed = count;
+
+    // Step 1: Find where the items are
+    const locations = [];
+    for (const[key, data] of Object.entries(this.chestMap)) {
+      for (const [name, qty] of Object.entries(data.items)) {
+        if (name.includes(itemName)) locations.push({ pos: data.pos, name, qty });
       }
     }
 
     if (locations.length === 0) {
-      this.bot.chat(`/msg ItayosOnTop I don't have any ${itemName} in memory.`);
-    } else {
-      this.bot.chat(`/msg ItayosOnTop Found ${itemName} in ${locations.length} chest(s).`);
-      locations.forEach(loc => console.log(`[Memory] ${loc.count}x ${loc.name} in [${loc.type}] at ${loc.pos.x}, ${loc.pos.y}, ${loc.pos.z}`));
+      this.bot.chat(`I don't have any ${itemName} in storage.`);
+      return;
     }
-    return locations;
-  }
 
-  async fetchItem(itemName, count) {
-    const mcData = require('minecraft-data')(this.bot.version);
-    const locations = this.findItem(itemName);
-    
-    if (locations.length === 0) return;
+    this.bot.chat(`Gathering ${count} ${itemName} from storage...`);
 
-    let needed = count;
-    this.bot.chat(`/msg ItayosOnTop Fetching ${count}x ${itemName} from storage...`);
-
+    // Step 2: Grab the items from storage chests
     for (const loc of locations) {
       if (needed <= 0) break;
-
       const itemId = mcData.itemsByName[loc.name]?.id;
       if (!itemId) continue;
 
-      let chestWindow;
+      let sourceChest;
       try {
-        chestWindow = await this.openChestAt(new Vec3(loc.pos.x, loc.pos.y, loc.pos.z));
-        
-        const toTake = Math.min(needed, loc.count);
-        await chestWindow.withdraw(itemId, null, toTake);
-        
+        sourceChest = await this.openChestAt(loc.pos);
+        const toTake = Math.min(needed, loc.qty);
+        await sourceChest.withdraw(itemId, null, toTake);
         needed -= toTake;
-        this.bot.chat(`/msg ItayosOnTop Grabbed ${toTake} ${loc.name} from the [${loc.type}] chest.`);
-        
-        // Update database so bot knows it took the items
-        this.chestMap[this.posKey(loc.pos)].items[loc.name] -= toTake;
-        if (this.chestMap[this.posKey(loc.pos)].items[loc.name] <= 0) {
-          delete this.chestMap[this.posKey(loc.pos)].items[loc.name];
-        }
 
-        // Re-evaluate category in case the chest is empty now
-        this.chestMap[this.posKey(loc.pos)].type = this.categorizeChest(this.chestMap[this.posKey(loc.pos)].items);
-
-      } catch (err) {
-        console.error(`[Storage] Failed to fetch from ${loc.pos.x},${loc.pos.y},${loc.pos.z}:`, err.message);
-      } finally {
-        if (chestWindow) await this.closeChest(chestWindow);
-      }
+        // Update memory
+        const key = this.posKey(loc.pos);
+        this.chestMap[key].items[loc.name] -= toTake;
+        if (this.chestMap[key].items[loc.name] <= 0) delete this.chestMap[key].items[loc.name];
+        this.chestMap[key].type = this.categorizeChest(this.chestMap[key].items);
+      } catch (e) {} 
+      finally { await this.closeChest(sourceChest); }
     }
-
     this.saveData();
-    this.bot.pathfinder.setGoal(null);
-    this.bot.clearControlStates();
 
-    if (needed > 0) {
-      this.bot.chat(`/msg ItayosOnTop Could not find enough ${itemName}. Short by ${needed}.`);
-    } else {
-      this.bot.chat(`/msg ItayosOnTop Finished fetching ${count} ${itemName}! I am done.`);
-    }
-  }
+    // Step 3: Deposit the gathered items into the user's requested chest
+    const grabbedAmount = count - needed;
+    if (grabbedAmount <= 0) return;
 
-  // ─── Info ──────────────────────────────────────────────────────────────────
-
-  listChests() {
-    const keys = Object.keys(this.chestMap);
-    if (keys.length === 0) {
-      this.bot.chat('I have 0 chests in memory. Run a scan first.');
-      return;
-    }
-    this.bot.chat(`/msg ItayosOnTop I have catalogued ${keys.length} chest(s).`);
-    // Logs the categories to the console so you can see them
-    const types = {};
-    for (const data of Object.values(this.chestMap)) {
-      types[data.type] = (types[data.type] || 0) + 1;
-    }
-    for (const [type, count] of Object.entries(types)) {
-      console.log(`- ${count}x [${type}] chests`);
-    }
-  }
-
-  inspectChest(pos) {
-    const key = this.posKey(pos);
-    const data = this.chestMap[key];
-    if (!data) {
-      this.bot.chat(`/msg ItayosOnTop I don't have any data for a chest at ${pos.x},${pos.y},${pos.z}`);
-      return;
-    }
+    this.bot.chat(`Gathered ${grabbedAmount}. Putting it in chest at ${destPos.x}, ${destPos.y}, ${destPos.z}...`);
     
-    const items = Object.entries(data.items).map(([name, count]) => `${count}x ${name}`).join(', ');
-    this.bot.chat(`/msg ItayosOnTop [${data.type}] Chest at ${pos.x},${pos.y},${pos.z}: ${items || 'Empty'}`);
-  }
+    let destChest;
+    try {
+      destChest = await this.openChestAt(destPos);
+      const botItems = this.bot.inventory.items().filter(i => i.name.includes(itemName));
+      for (const item of botItems) {
+        await destChest.deposit(item.type, item.metadata, item.count);
+      }
+    } catch (e) {
+      this.bot.chat(`Could not put items in the destination chest: ${e.message}`);
+    } finally {
+      await this.closeChest(destChest);
+    }
 
-  async sortInventory() {
-    this.bot.chat("/msg ItayosOnTop Sorting inventory logic not fully implemented yet.");
-  }
-
-  async sortChest(pos) {
-    this.bot.chat("/msg ItayosOnTop Sorting single chest logic not fully implemented yet.");
+    this.bot.chat(`Finished fetching task!`);
   }
 }
 
