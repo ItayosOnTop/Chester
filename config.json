@@ -9,8 +9,8 @@
   "scanAreas": [
     {
       "name": "Main Storage",
-      "from": { "x": -10, "y": -60, "z": 77 },
-      "to":   { "x": -5,  "y": -59, "z": 69  }
+      "from": { "x": 7, "y": -60, "z": 15 },
+      "to":   { "x": 12,  "y": -59, "z": 10  }
     },
     {
       "name": "Underground Vault",
