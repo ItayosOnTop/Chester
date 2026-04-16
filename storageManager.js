@@ -152,7 +152,7 @@ class StorageManager {
       return;
     }
 
-    this.bot.chat(`Found ${chestsInArea.length} chests. Beginning scan...`);
+    this.bot.chat(`/msg ItayosOnTop Found ${chestsInArea.length} chests. Beginning scan...`);
 
     // Sort chests by distance so the bot walks efficiently
     let remainingChests = [...chestsInArea];
@@ -232,9 +232,9 @@ class StorageManager {
     }
 
     if (locations.length === 0) {
-      this.bot.chat(`I don't have any ${itemName} in memory.`);
+      this.bot.chat(`/msg ItayosOnTop I don't have any ${itemName} in memory.`);
     } else {
-      this.bot.chat(`Found ${itemName} in ${locations.length} chest(s).`);
+      this.bot.chat(`/msg ItayosOnTop Found ${itemName} in ${locations.length} chest(s).`);
       locations.forEach(loc => console.log(`[Memory] ${loc.count}x ${loc.name} in [${loc.type}] at ${loc.pos.x}, ${loc.pos.y}, ${loc.pos.z}`));
     }
     return locations;
@@ -247,7 +247,7 @@ class StorageManager {
     if (locations.length === 0) return;
 
     let needed = count;
-    this.bot.chat(`Fetching ${count}x ${itemName} from storage...`);
+    this.bot.chat(`/msg ItayosOnTop Fetching ${count}x ${itemName} from storage...`);
 
     for (const loc of locations) {
       if (needed <= 0) break;
@@ -263,7 +263,7 @@ class StorageManager {
         await chestWindow.withdraw(itemId, null, toTake);
         
         needed -= toTake;
-        this.bot.chat(`Grabbed ${toTake} ${loc.name} from the [${loc.type}] chest.`);
+        this.bot.chat(`/msg ItayosOnTop Grabbed ${toTake} ${loc.name} from the [${loc.type}] chest.`);
         
         // Update database so bot knows it took the items
         this.chestMap[this.posKey(loc.pos)].items[loc.name] -= toTake;
@@ -286,9 +286,9 @@ class StorageManager {
     this.bot.clearControlStates();
 
     if (needed > 0) {
-      this.bot.chat(`Could not find enough ${itemName}. Short by ${needed}.`);
+      this.bot.chat(`/msg ItayosOnTop Could not find enough ${itemName}. Short by ${needed}.`);
     } else {
-      this.bot.chat(`Finished fetching ${count} ${itemName}! I am done.`);
+      this.bot.chat(`/msg ItayosOnTop Finished fetching ${count} ${itemName}! I am done.`);
     }
   }
 
@@ -300,7 +300,7 @@ class StorageManager {
       this.bot.chat('I have 0 chests in memory. Run a scan first.');
       return;
     }
-    this.bot.chat(`I have catalogued ${keys.length} chest(s).`);
+    this.bot.chat(`/msg ItayosOnTop I have catalogued ${keys.length} chest(s).`);
     // Logs the categories to the console so you can see them
     const types = {};
     for (const data of Object.values(this.chestMap)) {
@@ -315,20 +315,20 @@ class StorageManager {
     const key = this.posKey(pos);
     const data = this.chestMap[key];
     if (!data) {
-      this.bot.chat(`I don't have any data for a chest at ${pos.x},${pos.y},${pos.z}`);
+      this.bot.chat(`/msg ItayosOnTop I don't have any data for a chest at ${pos.x},${pos.y},${pos.z}`);
       return;
     }
     
     const items = Object.entries(data.items).map(([name, count]) => `${count}x ${name}`).join(', ');
-    this.bot.chat(`[${data.type}] Chest at ${pos.x},${pos.y},${pos.z}: ${items || 'Empty'}`);
+    this.bot.chat(`/msg ItayosOnTop [${data.type}] Chest at ${pos.x},${pos.y},${pos.z}: ${items || 'Empty'}`);
   }
 
   async sortInventory() {
-    this.bot.chat("Sorting inventory logic not fully implemented yet.");
+    this.bot.chat("/msg ItayosOnTop Sorting inventory logic not fully implemented yet.");
   }
 
   async sortChest(pos) {
-    this.bot.chat("Sorting single chest logic not fully implemented yet.");
+    this.bot.chat("/msg ItayosOnTop Sorting single chest logic not fully implemented yet.");
   }
 }
 
