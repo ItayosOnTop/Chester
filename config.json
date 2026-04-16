@@ -11,11 +11,6 @@
       "name": "Main Storage",
       "from": { "x": 7, "y": -60, "z": 15 },
       "to":   { "x": 12,  "y": -59, "z": 10  }
-    },
-    {
-      "name": "Underground Vault",
-      "from": { "x": 200, "y": 20, "z": 300 },
-      "to":   { "x": 250, "y": 40, "z": 350 }
     }
   ]
 }
