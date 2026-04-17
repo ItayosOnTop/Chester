@@ -57,7 +57,7 @@
           },
           "type": "Ores & Minerals",
           "items": {
-            "netherite_ingot": 117,
+            "netherite_ingot": 116,
             "diamond_sword": 1,
             "diamond": 64,
             "diamond_block": 64
@@ -104,7 +104,7 @@
           },
           "type": "Misc",
           "items": {
-            "grass_block": 1085
+            "grass_block": 1021
           }
         },
         "7,-60,10": {
@@ -125,9 +125,9 @@
             "y": -60,
             "z": 14
           },
-          "type": "Building Blocks",
+          "type": "Misc",
           "items": {
-            "chest": 361
+            "chest": 345
           }
         },
         "7,-60,15": {

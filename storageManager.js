@@ -49,55 +49,112 @@ class StorageManager {
   setDefaultDropChest(areaName, pos) { this.initArea(areaName); this.db[this.serverKey][areaName].dropChest = { x: pos.x, y: pos.y, z: pos.z }; this.saveData(); }
   getDefaultDropChest(areaName) { return this.db[this.serverKey]?.[areaName]?.dropChest; }
 
-  // ─── Precision Movement (The Anti-Circle Fix) ───────────────────────────
+  // ─── Hybrid Precision Movement (No More Circles) ────────────────────────
 
   async goTo(pos, distance = 2.5) {
     const targetCenter = new Vec3(pos.x + 0.5, pos.y, pos.z + 0.5);
 
-    return new Promise((resolve) => {
-      if (this.bot.entity.position.distanceTo(targetCenter) <= distance) {
+    return new Promise(async (resolve) => {
+      let dist = this.bot.entity.position.distanceTo(targetCenter);
+      const targetBlock = this.bot.blockAt(pos);
+      const hasSight = targetBlock ? this.bot.canSeeBlock(targetBlock) : false;
+
+      // 1. If we are already close enough, don't move
+      if (dist <= distance && hasSight) {
         this.bot.pathfinder.setGoal(null);
         this.bot.clearControlStates();
         return resolve();
       }
 
-      console.log(`[Movement] Walking to ${pos.x}, ${pos.y}, ${pos.z}...`);
-      this.bot.pathfinder.setGoal(new goals.GoalNear(pos.x, pos.y, pos.z, 1));
+      console.log(`[Movement] Going to ${pos.x}, ${pos.y}, ${pos.z}... (Dist: ${dist.toFixed(1)})`);
+
+      // 2. SHORT DISTANCE: "Direct Walk" (Ignores Pathfinder to prevent circles)
+      if (dist < 7 && hasSight) {
+        let stuckTimer = 0;
+        let lastDist = dist;
+
+        const walkTick = () => {
+          dist = this.bot.entity.position.distanceTo(targetCenter);
+          
+          if (dist <= distance) {
+            this.bot.removeListener('physicsTick', walkTick);
+            this.bot.clearControlStates();
+            return resolve();
+          }
+
+          stuckTimer++;
+          if (stuckTimer % 20 === 0) { // Check if stuck every 1 second
+            if (Math.abs(lastDist - dist) < 0.2) {
+              // Bot bumped into something. Abort direct walk and fallback to pathfinder.
+              this.bot.removeListener('physicsTick', walkTick);
+              this.bot.clearControlStates();
+              this.usePathfinder(pos, distance, targetCenter).then(resolve);
+              return;
+            }
+            lastDist = dist;
+          }
+
+          this.bot.lookAt(targetCenter.offset(0, 0.5, 0));
+          this.bot.setControlState('forward', true);
+          this.bot.setControlState('jump', this.bot.entity.isCollidedHorizontally);
+        };
+
+        this.bot.on('physicsTick', walkTick);
+
+        // Failsafe timeout
+        setTimeout(() => {
+          this.bot.removeListener('physicsTick', walkTick);
+          this.bot.clearControlStates();
+          resolve();
+        }, 8000);
+        return;
+      }
+
+      // 3. LONG DISTANCE: Pathfinder
+      await this.usePathfinder(pos, distance, targetCenter);
+      resolve();
+    });
+  }
+
+  // Helper method for the Pathfinder fallback
+  async usePathfinder(pos, distance, targetCenter) {
+    return new Promise((resolve) => {
+      // Look at the target before starting to prevent the initial backtrack loop!
+      this.bot.lookAt(targetCenter).then(() => {
+        this.bot.pathfinder.setGoal(new goals.GoalNear(pos.x, pos.y, pos.z, 1));
+      });
 
       let isFinished = false;
 
       const checkPosition = () => {
         if (isFinished) return;
-
         const currentDist = this.bot.entity.position.distanceTo(targetCenter);
         const block = this.bot.blockAt(pos);
         const hasSight = block ? this.bot.canSeeBlock(block) : false;
 
         if (currentDist <= distance && hasSight) {
           isFinished = true;
-          this.bot.removeListener('physicsTick', checkPosition); // <--- FIXED HERE
-          
+          this.bot.removeListener('physicsTick', checkPosition);
           this.bot.pathfinder.setGoal(null);
           this.bot.clearControlStates();['forward', 'back', 'left', 'right', 'jump', 'sprint'].forEach(k => this.bot.setControlState(k, false));
-
           setTimeout(resolve, 200); 
         }
       };
 
-      this.bot.on('physicsTick', checkPosition); // <--- FIXED HERE
+      this.bot.on('physicsTick', checkPosition);
 
       const cleanup = () => {
         if (!isFinished) {
           isFinished = true;
-          this.bot.removeListener('physicsTick', checkPosition); // <--- FIXED HERE
+          this.bot.removeListener('physicsTick', checkPosition);
           this.bot.pathfinder.setGoal(null);
           this.bot.clearControlStates();
           resolve();
         }
       };
 
-      this.bot.once('goal_reached', cleanup); // <--- CRASH FIXED HERE
-      setTimeout(cleanup, 12000); 
+      this.bot.once('goal_reached', cleanup);
+      setTimeout(cleanup, 12000);
     });
   }
 
