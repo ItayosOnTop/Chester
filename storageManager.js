@@ -189,7 +189,7 @@ async goTo(pos, distance = 2.5) {
     if (chestWindow) { chestWindow.close(); await this.bot.waitForTicks(5); }
   }
 
-  // ─── AI Categorization (mc-data) ─────────────────────────────────────────
+// ─── AI Categorization ───────────────────────────────────────────────────
 
   getItemCategory(itemName) {
     const item = this.mcData.itemsByName[itemName];
@@ -197,29 +197,33 @@ async goTo(pos, distance = 2.5) {
     if (item.food) return "Food";
     
     const n = itemName.toLowerCase();
-    if (n.includes('log') || n.includes('planks') || n.includes('wood') || n.includes('bark')) return "Wood";
-    if (n.includes('ore') || n.includes('ingot') || n.includes('raw') || n.includes('diamond') || n.includes('emerald') || n.includes('coal') || n.includes('redstone')) return "Ores & Minerals";
-    if (n.includes('sword') || n.includes('pickaxe') || n.includes('axe') || n.includes('shovel') || n.includes('helmet') || n.includes('chestplate') || n.includes('leggings') || n.includes('boots')) return "Gear";
-    if (n.includes('stone') || n.includes('dirt') || n.includes('sand') || n.includes('gravel') || n.includes('cobblestone')) return "Blocks & Earth";
     
+    if (n.match(/sword|pickaxe|axe|shovel|hoe|bow|crossbow|trident|shield/)) return "Tools & Weapons";
+    if (n.match(/helmet|chestplate|leggings|boots/)) return "Armor";
+    if (n.match(/log|wood|planks|sapling|leaves|fence|door|trapdoor|sign|boat/)) return "Wood";
+    if (n.match(/seeds|flower|mushroom|lily_pad|vine|tall_grass/)) return "Nature";
+    if (n.match(/ore|raw|ingot|nugget|diamond|emerald|coal|lapis|redstone_block|copper|gold|iron|netherite/)) return "Ores & Minerals";
+    if (n.match(/stone|dirt|sand|gravel|clay|glass|terracotta|concrete|bricks|diorite|andesite|granite|obsidian/)) return "Building Blocks";
+    if (n.match(/piston|observer|repeater|comparator|dispenser|dropper|hopper|button|lever|pressure_plate|redstone/)) return "Redstone";
+    if (n.match(/dye|bone|string|gunpowder|feather|leather|slime_ball|ender_pearl|blaze_rod|ghast_tear|spider_eye/)) return "Mob Drops & Dyes";
+
     return "Misc";
   }
 
   categorizeChest(items) {
     if (Object.keys(items).length === 0) return "Empty";
     const scores = {};
-    for (const[itemName, count] of Object.entries(items)) {
+    for (const [itemName, count] of Object.entries(items)) {
       const cat = this.getItemCategory(itemName);
       scores[cat] = (scores[cat] || 0) + count;
     }
-    let best = "Misc", max = 0;
-    for (const[cat, score] of Object.entries(scores)) {
-      if (score > max) { max = score; best = cat; }
-    }
-    return best;
+    // Return the category with the highest item count
+    return Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b);
   }
 
   // ─── Area Scanning ────────────────────────────────────────────────────────
+
+// ─── Area Scanning ────────────────────────────────────────────────────────
 
   async scanArea(areaName) {
     this.lastActiveArea = areaName;
@@ -229,11 +233,20 @@ async goTo(pos, distance = 2.5) {
     const containerIds =['chest', 'trapped_chest', 'barrel'].map(n => this.mcData.blocksByName[n]?.id).filter(Boolean);
     const blocks = this.bot.findBlocks({ matching: containerIds, maxDistance: 64, count: 5000 });
     
-    const chests = blocks.filter(p => 
-      p.x >= area.bounds.min.x && p.x <= area.bounds.max.x &&
-      p.y >= area.bounds.min.y && p.y <= area.bounds.max.y &&
-      p.z >= area.bounds.min.z && p.z <= area.bounds.max.z
-    );
+    const chests =[];
+    for (const p of blocks) {
+      if (p.x >= area.bounds.min.x && p.x <= area.bounds.max.x &&
+          p.y >= area.bounds.min.y && p.y <= area.bounds.max.y &&
+          p.z >= area.bounds.min.z && p.z <= area.bounds.max.z) {
+        
+        const block = this.bot.blockAt(p);
+        // FIX: Ignore the right half of double chests so we don't scan them twice!
+        if (block && (block.name === 'chest' || block.name === 'trapped_chest')) {
+          if (block.getProperties().type === 'right') continue;
+        }
+        chests.push(p);
+      }
+    }
 
     if (chests.length === 0) return this.bot.chat('No chests found in bounds.');
 
@@ -256,21 +269,27 @@ async goTo(pos, distance = 2.5) {
       }
     }
     this.saveData();
-    this.bot.chat(`Finished scanning ${chests.length} chests!`);
+    this.bot.chat(`Finished scanning ${chests.length} valid chests!`);
   }
 
   // ─── Sorting Logic ────────────────────────────────────────────────────────
 
+// ─── Sorting Logic ────────────────────────────────────────────────────────
+
   findBestStorageChest(areaName, itemName) {
     const chests = this.db[this.serverKey][areaName].chests;
+    // 1. Existing identical item
     for (const data of Object.values(chests)) if (data.items[itemName]) return data.pos;
+    // 2. Existing matching category
     const itemCat = this.getItemCategory(itemName);
     for (const data of Object.values(chests)) if (data.type === itemCat) return data.pos;
+    // 3. Fallback to an Empty chest
     for (const data of Object.values(chests)) if (data.type === "Empty") return data.pos;
-    return Object.values(chests)[0]?.pos || null;
+    
+    return null; // Area is completely full!
   }
 
-async sortChest(areaName, sourcePos) {
+  async sortChest(areaName, sourcePos) {
     this.lastActiveArea = areaName;
     if (!this.db[this.serverKey][areaName]?.chests) return this.bot.chat('Scan the area first.');
 
@@ -279,16 +298,9 @@ async sortChest(areaName, sourcePos) {
       sourceChest = await this.openChestAt(sourcePos);
       for (const item of sourceChest.containerItems()) {
         try { 
-          // Stop grabbing if inventory gets full, but don't abort sorting!
-          if (this.bot.inventory.emptySlotCount() === 0) {
-            this.bot.chat('My inventory is full! Sorting what I have so far...');
-            break; 
-          }
+          if (this.bot.inventory.emptySlotCount() === 0) break;
           await sourceChest.withdraw(item.type, item.metadata, item.count); 
-        } catch (e) { 
-          console.error(`Failed to withdraw ${item.name}:`, e.message);
-          continue; // <-- FIX: Continue to the next item instead of giving up!
-        } 
+        } catch (e) { continue; } 
       }
     } catch(e) {
       return this.bot.chat(`Failed to open drop-off chest.`);
@@ -296,18 +308,26 @@ async sortChest(areaName, sourcePos) {
       await this.closeChest(sourceChest); 
     }
 
-    // FIX: Group items by destination chest to avoid opening/closing the same chest 10 times!
     const destMap = new Map();
+    
     for (const item of this.bot.inventory.items()) {
       const destPos = this.findBestStorageChest(areaName, item.name);
-      if (!destPos) continue;
+      if (!destPos) {
+        this.bot.chat(`No room left for ${item.name}! Skipping.`);
+        continue;
+      }
       
       const key = this.posKey(destPos);
       if (!destMap.has(key)) destMap.set(key, { pos: destPos, items:[] });
       destMap.get(key).items.push(item);
+      
+      // FIX: If we assigned this to an Empty chest, immediately flag it as the new category 
+      // in the database so other non-matching items don't try to go here!
+      if (this.db[this.serverKey][areaName].chests[key].type === "Empty") {
+        this.db[this.serverKey][areaName].chests[key].type = this.getItemCategory(item.name);
+      }
     }
 
-    // Now go to each destination chest ONCE and deposit all matching items
     for (const { pos, items } of destMap.values()) {
       let destChest;
       try {
@@ -316,16 +336,12 @@ async sortChest(areaName, sourcePos) {
           try {
             await destChest.deposit(item.type, item.metadata, item.count);
             
-            // Update database
             const key = this.posKey(pos);
             this.db[this.serverKey][areaName].chests[key].items[item.name] = (this.db[this.serverKey][areaName].chests[key].items[item.name] || 0) + item.count;
             this.db[this.serverKey][areaName].chests[key].type = this.categorizeChest(this.db[this.serverKey][areaName].chests[key].items);
-          } catch (e) {
-            console.error(`Failed to deposit ${item.name} (Chest might be full):`, e.message);
-          }
+          } catch (e) {}
         }
       } catch (e) {
-         console.error(`Failed to open destination chest at ${pos}`, e.message);
       } finally { 
         await this.closeChest(destChest); 
       }
