@@ -1,5 +1,5 @@
 const { Vec3 } = require('vec3');
-const { goals } = require('mineflayer-pathfinder'); // <--- ADD THIS
+const { goals } = require('mineflayer-pathfinder');
 
 class CommandHandler {
   constructor(bot, storageManager, owner) {
@@ -14,15 +14,20 @@ class CommandHandler {
       this.bot.chat(`I am currently busy: ${this.currentTask}. Use !stop first.`);
       return;
     }
+    
     this.currentTask = taskName;
+    this.storage.forceStop = false; // Reset the kill-switch
+    
     try {
       await taskFunc();
     } catch (err) {
       console.error(`[Task Error]`, err);
       this.bot.chat(`Error: ${err.message}`);
     } finally {
+      // ONLY trigger the automatic goHome if the task finished naturally 
       if (this.currentTask === taskName) {
         this.currentTask = 'Idle';
+        this.bot.chat('Task complete!');
         await this.storage.goHome();
       }
     }
@@ -35,34 +40,43 @@ class CommandHandler {
     const cmd = parts[0].toLowerCase();
     const args = parts.slice(1);
 
-switch (cmd) {
+    switch (cmd) {
       case '!help':
-        this.bot.chat('Commands: !sethome <Area> x y z\n!setarea <Area> x1 y1 z1 x2 y2 z2\n!scan <Area>\n!sort <Area>[x y z]\n!fetch <Area> <item> <amt> [x y z]\n!status\n!follow <player>\n!stop');
+        this.bot.chat('Commands: !sethome <Area> x y z, !setarea <Area> x1 y1 z1 x2 y2 z2, !scan <Area>, !sort <Area> [x y z], !fetch <Area> <item> <amt> [x y z], !status, !follow <player>, !stop');
         break;
 
-      // === NEW SCAN COMMAND ===
       case '!scan':
         if (args.length !== 1) return this.bot.chat('Usage: !scan <AreaName>');
-        // The storage manager checks if the area exists and has bounds automatically!
-        this.bot.chat(`Scanning area[${args[0]}] for updates...`);
+        this.bot.chat(`Scanning area [${args[0]}] for updates...`);
         this.runTask(`Scanning ${args[0]}`, () => this.storage.scanArea(args[0]));
         break;
-      // ========================
 
       case '!status':
         this.bot.chat(`❤️ ${Math.round(this.bot.health)} | 🍗 ${Math.round(this.bot.food)} | 📋 Task: ${this.currentTask}`);
         break;
 
       case '!stop':
+        this.bot.chat('Stopping everything and going home...');
+        
+        // 1. Kills the !follow loop and skips the runTask's finally block
+        this.currentTask = 'Idle'; 
+        
+        // 2. Triggers the Kill Switch to instantly break all background loops (sorting/scanning)
+        this.storage.forceStop = true; 
+        
+        // 3. Immediately halt physical movement and close GUI
         this.bot.pathfinder.setGoal(null);
         this.bot.clearControlStates();
-        this.currentTask = 'Idle';
-        this.bot.chat('Stopped. Going home.');
-        this.storage.goHome();
+        if (this.bot.currentWindow) this.bot.currentWindow.close();
+
+        // 4. Wait a moment for background loops to safely die, then go home!
+        setTimeout(() => {
+          this.storage.forceStop = false;
+          this.storage.goHome();
+        }, 1500);
         break;
 
       case '!follow':
-        // Prevents spamming the command and creating multiple background loops
         if (this.currentTask !== 'Idle') {
           return this.bot.chat(`I am busy doing: ${this.currentTask}. Use !stop first.`);
         }
@@ -77,7 +91,6 @@ switch (cmd) {
         let lastTargetPos = null;
 
         const followTick = () => {
-          // If stopped or doing something else, cleanup and exit loop
           if (this.currentTask !== 'Following player') {
             this.bot.removeListener('physicsTick', followTick);
             this.bot.pathfinder.setGoal(null);
@@ -85,7 +98,6 @@ switch (cmd) {
             return;
           }
 
-          // Re-fetch entity in case the player respawned or reloaded chunks
           const entity = this.bot.players[args[0]]?.entity;
           if (!entity || !entity.isValid) return;
 
@@ -93,7 +105,6 @@ switch (cmd) {
           const dist = this.bot.entity.position.distanceTo(pos);
 
           if (dist <= 2.5) {
-            // Close enough: stop the pathfinder and smoothly look at player
             if (lastTargetPos !== null) {
               this.bot.pathfinder.setGoal(null);
               this.bot.clearControlStates();
@@ -101,8 +112,6 @@ switch (cmd) {
             }
             this.bot.lookAt(pos.offset(0, 1.5, 0), true);
           } else {
-            // Far away: Only update pathfinder goal if the player moved significantly
-            // This completely stops the bot from twitching/recalculating every tick!
             if (!lastTargetPos || lastTargetPos.distanceTo(pos) > 2) {
               lastTargetPos = pos.clone();
               this.bot.pathfinder.setGoal(new goals.GoalNear(pos.x, pos.y, pos.z, 2));
@@ -117,7 +126,7 @@ switch (cmd) {
         if (args.length !== 4) return this.bot.chat('Usage: !sethome <AreaName> x y z');
         const hx = Number(args[1]), hy = Number(args[2]), hz = Number(args[3]);
         this.storage.setHome(args[0], new Vec3(hx, hy, hz));
-        this.bot.chat(`Home for area[${args[0]}] set!`);
+        this.bot.chat(`Home for area [${args[0]}] set!`);
         this.storage.goHome(args[0]);
         break;
 

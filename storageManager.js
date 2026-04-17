@@ -12,6 +12,7 @@ class StorageManager {
     this.mcData = mcData;
     this.db = {}; 
     this.lastActiveArea = null;
+    this.forceStop = false; // Kill switch
     this.loadData();
   }
 
@@ -49,9 +50,11 @@ class StorageManager {
   setDefaultDropChest(areaName, pos) { this.initArea(areaName); this.db[this.serverKey][areaName].dropChest = { x: pos.x, y: pos.y, z: pos.z }; this.saveData(); }
   getDefaultDropChest(areaName) { return this.db[this.serverKey]?.[areaName]?.dropChest; }
 
-  // ─── Hybrid Precision Movement (No More Circles) ────────────────────────
+  // ─── Hybrid Precision Movement ──────────────────────────────────────────
 
-async goTo(pos, distance = 2.5) {
+  async goTo(pos, distance = 2.5) {
+    if (this.forceStop) return Promise.resolve(); // Kill Switch
+
     const targetCenter = new Vec3(pos.x + 0.5, pos.y, pos.z + 0.5);
 
     return new Promise(async (resolve) => {
@@ -70,7 +73,6 @@ async goTo(pos, distance = 2.5) {
 
       // 2. SHORT DISTANCE: "Direct Walk" (Ignores Pathfinder to prevent circles)
       if (dist < 7 && hasSight) {
-        // FIX: Explicitly shut down pathfinder so they don't fight!
         this.bot.pathfinder.setGoal(null); 
         this.bot.clearControlStates();
           
@@ -78,6 +80,12 @@ async goTo(pos, distance = 2.5) {
         let lastDist = dist;
 
         const walkTick = () => {
+          if (this.forceStop) { // Kill Switch
+            this.bot.removeListener('physicsTick', walkTick);
+            this.bot.clearControlStates();
+            return resolve();
+          }
+
           dist = this.bot.entity.position.distanceTo(targetCenter);
           
           if (dist <= distance) {
@@ -89,7 +97,6 @@ async goTo(pos, distance = 2.5) {
           stuckTimer++;
           if (stuckTimer % 20 === 0) { // Check if stuck every 1 second
             if (Math.abs(lastDist - dist) < 0.2) {
-              // Bot bumped into something. Abort direct walk and fallback to pathfinder.
               this.bot.removeListener('physicsTick', walkTick);
               this.bot.clearControlStates();
               this.usePathfinder(pos, distance, targetCenter).then(resolve);
@@ -98,7 +105,6 @@ async goTo(pos, distance = 2.5) {
             lastDist = dist;
           }
 
-          // FIX: Added 'true' to force the look and prevent spinning!
           this.bot.lookAt(targetCenter.offset(0, 0.5, 0), true);
           this.bot.setControlState('forward', true);
           this.bot.setControlState('jump', this.bot.entity.isCollidedHorizontally);
@@ -106,7 +112,6 @@ async goTo(pos, distance = 2.5) {
 
         this.bot.on('physicsTick', walkTick);
 
-        // Failsafe timeout
         setTimeout(() => {
           this.bot.removeListener('physicsTick', walkTick);
           this.bot.clearControlStates();
@@ -121,11 +126,8 @@ async goTo(pos, distance = 2.5) {
     });
   }
 
-  // Helper method for the Pathfinder fallback
-// Helper method for the Pathfinder fallback
   async usePathfinder(pos, distance, targetCenter) {
     return new Promise((resolve) => {
-      // FIX: Added 'true' so pathfinder starts perfectly aligned
       this.bot.lookAt(targetCenter, true).then(() => {
         this.bot.pathfinder.setGoal(new goals.GoalNear(pos.x, pos.y, pos.z, 1));
       });
@@ -136,6 +138,7 @@ async goTo(pos, distance = 2.5) {
         if (!isFinished) {
           isFinished = true;
           this.bot.removeListener('physicsTick', checkPosition);
+          this.bot.removeListener('goal_reached', cleanup);
           this.bot.pathfinder.setGoal(null);
           this.bot.clearControlStates();
           resolve();
@@ -143,6 +146,8 @@ async goTo(pos, distance = 2.5) {
       };
 
       const checkPosition = () => {
+        if (this.forceStop) return cleanup(); // Kill Switch
+        
         if (isFinished) return;
         const currentDist = this.bot.entity.position.distanceTo(targetCenter);
         const block = this.bot.blockAt(pos);
@@ -151,7 +156,7 @@ async goTo(pos, distance = 2.5) {
         if (currentDist <= distance && hasSight) {
           isFinished = true;
           this.bot.removeListener('physicsTick', checkPosition);
-          this.bot.removeListener('goal_reached', cleanup); // FIX: Prevent memory leak!
+          this.bot.removeListener('goal_reached', cleanup);
           this.bot.pathfinder.setGoal(null);
           this.bot.clearControlStates();
           setTimeout(resolve, 200); 
@@ -167,15 +172,17 @@ async goTo(pos, distance = 2.5) {
   async goHome(areaName = null) {
     const area = areaName || this.lastActiveArea;
     if (!area || !this.db[this.serverKey][area]?.home) return;
+    
     const h = this.db[this.serverKey][area].home;
-    await this.goTo(new Vec3(h.x, h.y, h.z), 1);
+    this.bot.chat(`Returning to home base in [${area}]...`);
+    await this.goTo(new Vec3(h.x, h.y, h.z), 1.5);
   }
 
   async openChestAt(pos) {
     const vec = new Vec3(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z));
-    
     await this.goTo(vec, 2.5); 
-    
+    if (this.forceStop) return null;
+
     await this.bot.lookAt(vec.offset(0.5, 0.5, 0.5), true);
     await this.bot.waitForTicks(5);
     
@@ -189,40 +196,49 @@ async goTo(pos, distance = 2.5) {
     if (chestWindow) { chestWindow.close(); await this.bot.waitForTicks(5); }
   }
 
-// ─── AI Categorization ───────────────────────────────────────────────────
-
-// ─── AI Categorization ───────────────────────────────────────────────────
+  // ─── AI Categorization ───────────────────────────────────────────────────
 
   getItemCategory(itemName) {
     const item = this.mcData.itemsByName[itemName];
     if (!item) return "Misc";
     
-    // Food gets checked first so Golden Apples don't become "Gold" Ores
-    if (item.food) return "Food"; 
-    
     const n = itemName.toLowerCase();
+
+    // 1. Food & Potions (Explicitly named so it never fails)
+    if (n.match(/apple|bread|porkchop|beef|steak|mutton|chicken|cod|salmon|potato|carrot|melon|berry|cookie|pie|stew|soup|honey|potion|bottle/)) return "Food & Potions";
+
+    // 2. Tools & Weapons
+    if (n.match(/sword|pickaxe|_axe|_hoe|_bow|crossbow|trident|shield|arrow|bucket|fishing_rod|shears|flint|lead|name_tag/)) return "Tools & Weapons";
     
-    // 1. Gear (Must be checked before Ores so "iron_sword" doesn't become an "iron" ore)
-    if (n.match(/sword|pickaxe|_axe|_hoe|_bow|crossbow|trident|shield|arrow|bucket|fishing_rod|shears|flint/)) return "Tools & Weapons";
-    if (n.match(/helmet|chestplate|leggings|boots|horse_armor/)) return "Armor";
+    // 3. Armor (Checked BEFORE Workstations so chestplate doesn't become a chest)
+    if (n.match(/helmet|chestplate|leggings|boots|horse_armor|elytra/)) return "Armor";
     
-    // 2. Redstone (Must be checked BEFORE Building Blocks so "redstone" doesn't trigger "stone")
+    // 4. Redstone
     if (n.match(/redstone|piston|observer|repeater|comparator|dispenser|dropper|hopper|button|lever|pressure_plate|sensor|target|daylight_detector|torch|lamp/)) return "Redstone";
     
-    // 3. Decorations & Transport (Groups all doors, chests, fences, and boats together)
-    if (n.match(/door|trapdoor|fence|sign|boat|chest|barrel|bed|bell|anvil|cauldron|minecart/)) return "Decorations & Transport";
+    // 5. Transport (Checked BEFORE Workstations so chest_minecart goes to Transport)
+    if (n.match(/boat|minecart|rail|saddle/)) return "Transport";
 
-    // 4. Ores & Minerals
-    if (n.match(/_ore|raw_|ingot|nugget|diamond|emerald|coal|lapis|copper|gold|iron|netherite|quartz|amethyst/)) return "Ores & Minerals";
+    // 6. Workstations & Storage (Furnaces, Chests, Crafting Tables)
+    if (n.match(/furnace|smoker|crafting_table|loom|stonecutter|grindstone|smithing_table|cartography_table|fletching_table|chest|barrel|shulker|bed|bell|anvil|cauldron|jukebox|noteblock|spawner|enchanting_table/)) return "Workstations & Storage";
+
+    // 7. Ores & Minerals
+    if (n.match(/_ore|raw_|ingot|nugget|diamond|emerald|coal|lapis|copper|gold|iron|netherite|quartz|amethyst|glowstone/)) return "Ores & Minerals";
     
-    // 5. Nature & Wood
-    if (n.match(/log|wood|planks|sapling|leaves|seeds|flower|mushroom|lily|vine|tall_grass|wheat|potato|carrot|beetroot|pumpkin|melon|sugar_cane|kelp|moss|bamboo|cactus/)) return "Nature & Wood";
+    // 8. Nature & Wood
+    if (n.match(/log|wood|planks|sapling|leaves|seeds|flower|mushroom|lily|vine|tall_grass|wheat|sugar_cane|kelp|moss|bamboo|cactus|sponge|web/)) return "Nature & Wood";
     
-    // 6. Mob Drops & Dyes
-    if (n.match(/dye|bone|string|gunpowder|feather|leather|slime|ender_pearl|blaze|ghast|spider|flesh|shulker|phantom|shell/)) return "Mob Drops & Dyes";
+    // 9. Mob Drops & Dyes
+    if (n.match(/dye|bone|string|gunpowder|feather|leather|slime|ender_pearl|blaze|ghast|spider|flesh|phantom|shell|prismarine_shard|prismarine_crystals|scute/)) return "Mob Drops & Dyes";
     
-    // 7. Building Blocks (Checked LAST so "stone" doesn't hijack "redstone" or "end_stone_bricks")
-    if (n.match(/stone|dirt|sand|gravel|clay|glass|terracotta|concrete|bricks|diorite|andesite|granite|obsidian|basalt|blackstone|tuff|calcite|dripstone|ice|prismarine|mud|purpur/)) return "Building Blocks";
+    // 10. Decorations
+    if (n.match(/door|trapdoor|fence|wall|gate|sign|ladder|glass|pane|carpet|painting|item_frame|candle|banner|head|skull/)) return "Decorations";
+
+    // 11. Building Blocks (Checked LAST so it doesn't hijack specific stone types)
+    if (n.match(/stone|dirt|sand|gravel|clay|terracotta|concrete|bricks|diorite|andesite|granite|obsidian|basalt|blackstone|tuff|calcite|dripstone|ice|prismarine|mud|purpur|end_stone|netherrack|soul_sand|magma_block|nylium|coral/)) return "Building Blocks";
+
+    // Absolute Fallback
+    if (item.food) return "Food & Potions";
 
     return "Misc";
   }
@@ -234,13 +250,10 @@ async goTo(pos, distance = 2.5) {
       const cat = this.getItemCategory(itemName);
       scores[cat] = (scores[cat] || 0) + count;
     }
-    // Return the category with the highest item count
     return Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b);
   }
 
   // ─── Area Scanning ────────────────────────────────────────────────────────
-
-// ─── Area Scanning ────────────────────────────────────────────────────────
 
   async scanArea(areaName) {
     this.lastActiveArea = areaName;
@@ -257,7 +270,7 @@ async goTo(pos, distance = 2.5) {
           p.z >= area.bounds.min.z && p.z <= area.bounds.max.z) {
         
         const block = this.bot.blockAt(p);
-        // FIX: Ignore the right half of double chests so we don't scan them twice!
+        // Ignore the right half of double chests so we don't scan them twice!
         if (block && (block.name === 'chest' || block.name === 'trapped_chest')) {
           if (block.getProperties().type === 'right') continue;
         }
@@ -271,9 +284,12 @@ async goTo(pos, distance = 2.5) {
     this.db[this.serverKey][areaName].chests = {};
 
     for (const pos of chests) {
+      if (this.forceStop) break; // Kill Switch
+
       let chestWindow;
       try {
         chestWindow = await this.openChestAt(pos);
+        if (!chestWindow) continue;
         const items = {};
         for (const item of chestWindow.containerItems()) {
           items[item.name] = (items[item.name] || 0) + item.count;
@@ -285,22 +301,21 @@ async goTo(pos, distance = 2.5) {
         await this.closeChest(chestWindow); 
       }
     }
-    this.saveData();
-    this.bot.chat(`Finished scanning ${chests.length} valid chests!`);
+    
+    if (!this.forceStop) {
+      this.saveData();
+      this.bot.chat(`Finished scanning ${chests.length} valid chests!`);
+    }
   }
 
   // ─── Sorting Logic ────────────────────────────────────────────────────────
 
-// ─── Sorting Logic ────────────────────────────────────────────────────────
-
   findBestStorageChest(areaName, itemName) {
     const chests = this.db[this.serverKey][areaName].chests;
-    // 1. Existing identical item
     for (const data of Object.values(chests)) if (data.items[itemName]) return data.pos;
-    // 2. Existing matching category
+    
     const itemCat = this.getItemCategory(itemName);
     for (const data of Object.values(chests)) if (data.type === itemCat) return data.pos;
-    // 3. Fallback to an Empty chest
     for (const data of Object.values(chests)) if (data.type === "Empty") return data.pos;
     
     return null; // Area is completely full!
@@ -310,14 +325,22 @@ async goTo(pos, distance = 2.5) {
     this.lastActiveArea = areaName;
     if (!this.db[this.serverKey][areaName]?.chests) return this.bot.chat('Scan the area first.');
 
+    if (this.forceStop) return; // Kill Switch
+
     let sourceChest;
     try {
       sourceChest = await this.openChestAt(sourcePos);
+      if (!sourceChest) return;
       for (const item of sourceChest.containerItems()) {
         try { 
-          if (this.bot.inventory.emptySlotCount() === 0) break;
+          if (this.bot.inventory.emptySlotCount() === 0) {
+            this.bot.chat('My inventory is full! Sorting what I have so far...');
+            break; 
+          }
           await sourceChest.withdraw(item.type, item.metadata, item.count); 
-        } catch (e) { continue; } 
+        } catch (e) { 
+          continue; 
+        } 
       }
     } catch(e) {
       return this.bot.chat(`Failed to open drop-off chest.`);
@@ -338,17 +361,19 @@ async goTo(pos, distance = 2.5) {
       if (!destMap.has(key)) destMap.set(key, { pos: destPos, items:[] });
       destMap.get(key).items.push(item);
       
-      // FIX: If we assigned this to an Empty chest, immediately flag it as the new category 
-      // in the database so other non-matching items don't try to go here!
+      // If we assigned this to an Empty chest, immediately flag it in DB memory
       if (this.db[this.serverKey][areaName].chests[key].type === "Empty") {
         this.db[this.serverKey][areaName].chests[key].type = this.getItemCategory(item.name);
       }
     }
 
     for (const { pos, items } of destMap.values()) {
+      if (this.forceStop) break; // Kill Switch
+
       let destChest;
       try {
         destChest = await this.openChestAt(pos);
+        if (!destChest) continue;
         for (const item of items) {
           try {
             await destChest.deposit(item.type, item.metadata, item.count);
@@ -364,8 +389,10 @@ async goTo(pos, distance = 2.5) {
       }
     }
     
-    this.saveData();
-    this.bot.chat('Sorting complete!');
+    if (!this.forceStop) {
+      this.saveData();
+      this.bot.chat('Sorting complete!');
+    }
   }
 
   // ─── Fetching Logic ───────────────────────────────────────────────────────
@@ -385,13 +412,17 @@ async goTo(pos, distance = 2.5) {
     if (locations.length === 0) return this.bot.chat(`I don't have any ${itemName} in [${areaName}].`);
 
     for (const loc of locations) {
+      if (this.forceStop) break; // Kill Switch
       if (needed <= 0) break;
+      
       const itemId = this.mcData.itemsByName[itemName]?.id;
       if (!itemId) continue;
 
       let sourceChest;
       try {
         sourceChest = await this.openChestAt(loc.pos);
+        if (!sourceChest) continue;
+        
         const toTake = Math.min(needed, loc.qty);
         await sourceChest.withdraw(itemId, null, toTake);
         needed -= toTake;
@@ -404,6 +435,9 @@ async goTo(pos, distance = 2.5) {
         this.db[this.serverKey][areaName].chests[key].type = this.categorizeChest(this.db[this.serverKey][areaName].chests[key].items);
       } catch (e) { } finally { await this.closeChest(sourceChest); }
     }
+    
+    if (this.forceStop) return;
+
     this.saveData();
 
     const grabbedAmount = count - needed;
@@ -412,6 +446,7 @@ async goTo(pos, distance = 2.5) {
     let destChest;
     try {
       destChest = await this.openChestAt(destPos);
+      if (!destChest) return;
       const botItems = this.bot.inventory.items().filter(i => i.name.includes(itemName));
       for (const item of botItems) {
         await destChest.deposit(item.type, item.metadata, item.count);

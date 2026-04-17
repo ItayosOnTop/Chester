@@ -28,10 +28,40 @@
           "type": "Armor",
           "items": {
             "netherite_boots": 1,
-            "netherite_chestplate": 1,
-            "diamond_chestplate": 1,
-            "leather_chestplate": 1
+            "netherite_chestplate": 2,
+            "diamond_chestplate": 2,
+            "leather_chestplate": 2
           }
+        },
+        "14,-60,13": {
+          "pos": {
+            "x": 14,
+            "y": -60,
+            "z": 13
+          },
+          "type": "Empty",
+          "items": {}
+        },
+        "7,-59,12": {
+          "pos": {
+            "x": 7,
+            "y": -59,
+            "z": 12
+          },
+          "type": "Decorations",
+          "items": {
+            "oak_trapdoor": 128,
+            "iron_trapdoor": 2
+          }
+        },
+        "14,-59,13": {
+          "pos": {
+            "x": 14,
+            "y": -59,
+            "z": 13
+          },
+          "type": "Empty",
+          "items": {}
         },
         "7,-60,14": {
           "pos": {
@@ -41,25 +71,21 @@
           },
           "type": "Nature & Wood",
           "items": {
-            "stripped_jungle_log": 64,
-            "oak_planks": 64,
-            "oak_log": 64,
-            "stripped_birch_log": 64,
-            "acacia_planks": 64
+            "stripped_jungle_log": 128,
+            "oak_planks": 128,
+            "oak_log": 256,
+            "stripped_birch_log": 128,
+            "acacia_planks": 128
           }
         },
-        "7,-59,12": {
+        "14,-60,11": {
           "pos": {
-            "x": 7,
-            "y": -59,
-            "z": 12
+            "x": 14,
+            "y": -60,
+            "z": 11
           },
-          "type": "Decorations & Transport",
-          "items": {
-            "oak_trapdoor": 64,
-            "iron_trapdoor": 1,
-            "chest": 1
-          }
+          "type": "Empty",
+          "items": {}
         },
         "7,-59,14": {
           "pos": {
@@ -69,12 +95,21 @@
           },
           "type": "Redstone",
           "items": {
-            "comparator": 1,
-            "repeater": 1,
-            "redstone_lamp": 1,
-            "redstone_torch": 1,
-            "redstone": 1
+            "comparator": 2,
+            "repeater": 2,
+            "redstone_lamp": 2,
+            "redstone_torch": 2,
+            "redstone": 2
           }
+        },
+        "14,-59,11": {
+          "pos": {
+            "x": 14,
+            "y": -59,
+            "z": 11
+          },
+          "type": "Empty",
+          "items": {}
         },
         "7,-58,12": {
           "pos": {
@@ -84,22 +119,20 @@
           },
           "type": "Tools & Weapons",
           "items": {
-            "wooden_axe": 1,
-            "iron_sword": 1,
-            "iron_axe": 1,
-            "wooden_sword": 1
+            "wooden_axe": 2,
+            "iron_sword": 2,
+            "iron_axe": 2,
+            "wooden_sword": 2
           }
         },
-        "7,-58,14": {
+        "14,-58,13": {
           "pos": {
-            "x": 7,
+            "x": 14,
             "y": -58,
-            "z": 14
+            "z": 13
           },
-          "type": "Misc",
-          "items": {
-            "furnace": 65
-          }
+          "type": "Empty",
+          "items": {}
         },
         "7,-60,10": {
           "pos": {
@@ -109,15 +142,59 @@
           },
           "type": "Building Blocks",
           "items": {
-            "cobblestone": 64,
-            "granite": 64
+            "granite": 128
           }
+        },
+        "7,-58,14": {
+          "pos": {
+            "x": 7,
+            "y": -58,
+            "z": 14
+          },
+          "type": "Workstations & Storage",
+          "items": {
+            "furnace": 130,
+            "chest": 2
+          }
+        },
+        "14,-58,11": {
+          "pos": {
+            "x": 14,
+            "y": -58,
+            "z": 11
+          },
+          "type": "Empty",
+          "items": {}
         },
         "7,-59,10": {
           "pos": {
             "x": 7,
             "y": -59,
             "z": 10
+          },
+          "type": "Food & Potions",
+          "items": {
+            "enchanted_golden_apple": 128,
+            "golden_apple": 128,
+            "cooked_beef": 128,
+            "bread": 128,
+            "beef": 128
+          }
+        },
+        "14,-60,15": {
+          "pos": {
+            "x": 14,
+            "y": -60,
+            "z": 15
+          },
+          "type": "Empty",
+          "items": {}
+        },
+        "14,-59,15": {
+          "pos": {
+            "x": 14,
+            "y": -59,
+            "z": 15
           },
           "type": "Empty",
           "items": {}
@@ -131,19 +208,10 @@
           "type": "Empty",
           "items": {}
         },
-        "7,-57,14": {
-          "pos": {
-            "x": 7,
-            "y": -57,
-            "z": 14
-          },
-          "type": "Empty",
-          "items": {}
-        },
-        "14,-60,13": {
+        "14,-57,13": {
           "pos": {
             "x": 14,
-            "y": -60,
+            "y": -57,
             "z": 13
           },
           "type": "Empty",
@@ -158,78 +226,6 @@
           "type": "Empty",
           "items": {}
         },
-        "14,-59,13": {
-          "pos": {
-            "x": 14,
-            "y": -59,
-            "z": 13
-          },
-          "type": "Empty",
-          "items": {}
-        },
-        "14,-60,11": {
-          "pos": {
-            "x": 14,
-            "y": -60,
-            "z": 11
-          },
-          "type": "Empty",
-          "items": {}
-        },
-        "14,-58,13": {
-          "pos": {
-            "x": 14,
-            "y": -58,
-            "z": 13
-          },
-          "type": "Empty",
-          "items": {}
-        },
-        "14,-59,11": {
-          "pos": {
-            "x": 14,
-            "y": -59,
-            "z": 11
-          },
-          "type": "Empty",
-          "items": {}
-        },
-        "14,-60,15": {
-          "pos": {
-            "x": 14,
-            "y": -60,
-            "z": 15
-          },
-          "type": "Empty",
-          "items": {}
-        },
-        "7,-57,10": {
-          "pos": {
-            "x": 7,
-            "y": -57,
-            "z": 10
-          },
-          "type": "Empty",
-          "items": {}
-        },
-        "14,-59,15": {
-          "pos": {
-            "x": 14,
-            "y": -59,
-            "z": 15
-          },
-          "type": "Empty",
-          "items": {}
-        },
-        "14,-58,11": {
-          "pos": {
-            "x": 14,
-            "y": -58,
-            "z": 11
-          },
-          "type": "Empty",
-          "items": {}
-        },
         "14,-58,15": {
           "pos": {
             "x": 14,
@@ -239,11 +235,11 @@
           "type": "Empty",
           "items": {}
         },
-        "14,-57,13": {
+        "7,-57,14": {
           "pos": {
-            "x": 14,
+            "x": 7,
             "y": -57,
-            "z": 13
+            "z": 14
           },
           "type": "Empty",
           "items": {}
@@ -253,6 +249,15 @@
             "x": 14,
             "y": -57,
             "z": 11
+          },
+          "type": "Empty",
+          "items": {}
+        },
+        "7,-57,10": {
+          "pos": {
+            "x": 7,
+            "y": -57,
+            "z": 10
           },
           "type": "Empty",
           "items": {}

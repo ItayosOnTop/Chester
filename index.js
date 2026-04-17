@@ -8,8 +8,15 @@ const CommandHandler = require('./commandHandler');
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 if (!fs.existsSync(CONFIG_PATH)) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify({
-    server: { host: "localhost", port: 25565, username: "Chester", version: "1.20.1" },
-    owner: "ItayosOnTop"
+    server: { host: "localhost", port: 25565, username: "Chester", version: "1.20.6" },
+    owner: "ItayosOnTop",
+    scanAreas:[
+      {
+        "name": "Main Storage",
+        "from": { "x": 7, "y": -60, "z": 15 },
+        "to":   { "x": 12,  "y": -59, "z": 10  }
+      }
+    ]
   }, null, 2));
   console.log('Created config.json. Please set your IP and restart.');
   process.exit(1);
@@ -36,11 +43,13 @@ bot.once('spawn', () => {
   const mcData = require('minecraft-data')(bot.version);
   const movements = new Movements(bot, mcData);
   
-  // THE FIX: Disable actions that cause the bot to spin or get stuck
+  // Disable actions that cause the bot to spin or get stuck
   movements.canDig = false;
   movements.canPlace = false;
-  movements.allowSprinting = false; // Stops overshooting the target!
+  movements.allowSprinting = false; 
   movements.allow1by1towers = false;
+  movements.scafoldingBlocks = [] 
+  movements.allow1by1towers = false
   
   bot.pathfinder.setMovements(movements);
 
