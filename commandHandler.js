@@ -1,4 +1,5 @@
 const { Vec3 } = require('vec3');
+const { goals } = require('mineflayer-pathfinder'); // <--- ADD THIS
 
 class CommandHandler {
   constructor(bot, storageManager, owner) {
@@ -52,7 +53,8 @@ class CommandHandler {
         break;
 
       case '!follow':
-        if (this.currentTask !== 'Idle' && this.currentTask !== 'Following player') {
+        // Prevents spamming the command and creating multiple background loops
+        if (this.currentTask !== 'Idle') {
           return this.bot.chat(`I am busy doing: ${this.currentTask}. Use !stop first.`);
         }
         if (!args[0]) return this.bot.chat('Usage: !follow <playerName>');
@@ -61,38 +63,45 @@ class CommandHandler {
         if (!targetPlayer) return this.bot.chat(`I cannot see ${args[0]}.`);
         
         this.currentTask = 'Following player';
-        this.bot.pathfinder.setGoal(null);
-        this.bot.clearControlStates();
+        this.bot.chat(`Following ${args[0]}!`);
+        
+        let lastTargetPos = null;
 
         const followTick = () => {
+          // If stopped or doing something else, cleanup and exit loop
           if (this.currentTask !== 'Following player') {
-            this.bot.removeListener('physicsTick', followTick); // <--- FIXED HERE
+            this.bot.removeListener('physicsTick', followTick);
+            this.bot.pathfinder.setGoal(null);
             this.bot.clearControlStates();
             return;
           }
 
-          if (!targetPlayer || !targetPlayer.isValid) return;
+          // Re-fetch entity in case the player respawned or reloaded chunks
+          const entity = this.bot.players[args[0]]?.entity;
+          if (!entity || !entity.isValid) return;
 
-          const dist = this.bot.entity.position.distanceTo(targetPlayer.position);
-          
-          if (dist > 3) {
-            this.bot.lookAt(targetPlayer.position.offset(0, 1.5, 0));
-            this.bot.setControlState('forward', true);
-            
-            if (this.bot.entity.isCollidedHorizontally) {
-              this.bot.setControlState('jump', true);
-            } else {
-              this.bot.setControlState('jump', false);
+          const pos = entity.position;
+          const dist = this.bot.entity.position.distanceTo(pos);
+
+          if (dist <= 2.5) {
+            // Close enough: stop the pathfinder and smoothly look at player
+            if (lastTargetPos !== null) {
+              this.bot.pathfinder.setGoal(null);
+              this.bot.clearControlStates();
+              lastTargetPos = null;
             }
+            this.bot.lookAt(pos.offset(0, 1.5, 0), true);
           } else {
-            this.bot.setControlState('forward', false);
-            this.bot.setControlState('jump', false);
-            this.bot.lookAt(targetPlayer.position.offset(0, 1.5, 0));
+            // Far away: Only update pathfinder goal if the player moved significantly
+            // This completely stops the bot from twitching/recalculating every tick!
+            if (!lastTargetPos || lastTargetPos.distanceTo(pos) > 2) {
+              lastTargetPos = pos.clone();
+              this.bot.pathfinder.setGoal(new goals.GoalNear(pos.x, pos.y, pos.z, 2));
+            }
           }
         };
 
-        this.bot.on('physicsTick', followTick); // <--- FIXED HERE
-        this.bot.chat(`Following ${args[0]}!`);
+        this.bot.on('physicsTick', followTick);
         break;
 
       case '!sethome':

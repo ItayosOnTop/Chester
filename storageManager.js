@@ -51,7 +51,7 @@ class StorageManager {
 
   // ─── Hybrid Precision Movement (No More Circles) ────────────────────────
 
-  async goTo(pos, distance = 2.5) {
+async goTo(pos, distance = 2.5) {
     const targetCenter = new Vec3(pos.x + 0.5, pos.y, pos.z + 0.5);
 
     return new Promise(async (resolve) => {
@@ -70,6 +70,10 @@ class StorageManager {
 
       // 2. SHORT DISTANCE: "Direct Walk" (Ignores Pathfinder to prevent circles)
       if (dist < 7 && hasSight) {
+        // FIX: Explicitly shut down pathfinder so they don't fight!
+        this.bot.pathfinder.setGoal(null); 
+        this.bot.clearControlStates();
+          
         let stuckTimer = 0;
         let lastDist = dist;
 
@@ -94,7 +98,8 @@ class StorageManager {
             lastDist = dist;
           }
 
-          this.bot.lookAt(targetCenter.offset(0, 0.5, 0));
+          // FIX: Added 'true' to force the look and prevent spinning!
+          this.bot.lookAt(targetCenter.offset(0, 0.5, 0), true);
           this.bot.setControlState('forward', true);
           this.bot.setControlState('jump', this.bot.entity.isCollidedHorizontally);
         };
@@ -117,31 +122,15 @@ class StorageManager {
   }
 
   // Helper method for the Pathfinder fallback
+// Helper method for the Pathfinder fallback
   async usePathfinder(pos, distance, targetCenter) {
     return new Promise((resolve) => {
-      // Look at the target before starting to prevent the initial backtrack loop!
-      this.bot.lookAt(targetCenter).then(() => {
+      // FIX: Added 'true' so pathfinder starts perfectly aligned
+      this.bot.lookAt(targetCenter, true).then(() => {
         this.bot.pathfinder.setGoal(new goals.GoalNear(pos.x, pos.y, pos.z, 1));
       });
 
       let isFinished = false;
-
-      const checkPosition = () => {
-        if (isFinished) return;
-        const currentDist = this.bot.entity.position.distanceTo(targetCenter);
-        const block = this.bot.blockAt(pos);
-        const hasSight = block ? this.bot.canSeeBlock(block) : false;
-
-        if (currentDist <= distance && hasSight) {
-          isFinished = true;
-          this.bot.removeListener('physicsTick', checkPosition);
-          this.bot.pathfinder.setGoal(null);
-          this.bot.clearControlStates();['forward', 'back', 'left', 'right', 'jump', 'sprint'].forEach(k => this.bot.setControlState(k, false));
-          setTimeout(resolve, 200); 
-        }
-      };
-
-      this.bot.on('physicsTick', checkPosition);
 
       const cleanup = () => {
         if (!isFinished) {
@@ -153,6 +142,23 @@ class StorageManager {
         }
       };
 
+      const checkPosition = () => {
+        if (isFinished) return;
+        const currentDist = this.bot.entity.position.distanceTo(targetCenter);
+        const block = this.bot.blockAt(pos);
+        const hasSight = block ? this.bot.canSeeBlock(block) : false;
+
+        if (currentDist <= distance && hasSight) {
+          isFinished = true;
+          this.bot.removeListener('physicsTick', checkPosition);
+          this.bot.removeListener('goal_reached', cleanup); // FIX: Prevent memory leak!
+          this.bot.pathfinder.setGoal(null);
+          this.bot.clearControlStates();
+          setTimeout(resolve, 200); 
+        }
+      };
+
+      this.bot.on('physicsTick', checkPosition);
       this.bot.once('goal_reached', cleanup);
       setTimeout(cleanup, 12000);
     });
@@ -264,7 +270,7 @@ class StorageManager {
     return Object.values(chests)[0]?.pos || null;
   }
 
-  async sortChest(areaName, sourcePos) {
+async sortChest(areaName, sourcePos) {
     this.lastActiveArea = areaName;
     if (!this.db[this.serverKey][areaName]?.chests) return this.bot.chat('Scan the area first.');
 
@@ -272,7 +278,17 @@ class StorageManager {
     try {
       sourceChest = await this.openChestAt(sourcePos);
       for (const item of sourceChest.containerItems()) {
-        try { await sourceChest.withdraw(item.type, item.metadata, item.count); } catch (e) { break; } 
+        try { 
+          // Stop grabbing if inventory gets full, but don't abort sorting!
+          if (this.bot.inventory.emptySlotCount() === 0) {
+            this.bot.chat('My inventory is full! Sorting what I have so far...');
+            break; 
+          }
+          await sourceChest.withdraw(item.type, item.metadata, item.count); 
+        } catch (e) { 
+          console.error(`Failed to withdraw ${item.name}:`, e.message);
+          continue; // <-- FIX: Continue to the next item instead of giving up!
+        } 
       }
     } catch(e) {
       return this.bot.chat(`Failed to open drop-off chest.`);
@@ -280,20 +296,41 @@ class StorageManager {
       await this.closeChest(sourceChest); 
     }
 
+    // FIX: Group items by destination chest to avoid opening/closing the same chest 10 times!
+    const destMap = new Map();
     for (const item of this.bot.inventory.items()) {
       const destPos = this.findBestStorageChest(areaName, item.name);
       if (!destPos) continue;
+      
+      const key = this.posKey(destPos);
+      if (!destMap.has(key)) destMap.set(key, { pos: destPos, items:[] });
+      destMap.get(key).items.push(item);
+    }
 
+    // Now go to each destination chest ONCE and deposit all matching items
+    for (const { pos, items } of destMap.values()) {
       let destChest;
       try {
-        destChest = await this.openChestAt(destPos);
-        await destChest.deposit(item.type, item.metadata, item.count);
-        
-        const key = this.posKey(destPos);
-        this.db[this.serverKey][areaName].chests[key].items[item.name] = (this.db[this.serverKey][areaName].chests[key].items[item.name] || 0) + item.count;
-        this.db[this.serverKey][areaName].chests[key].type = this.categorizeChest(this.db[this.serverKey][areaName].chests[key].items);
-      } catch (e) { } finally { await this.closeChest(destChest); }
+        destChest = await this.openChestAt(pos);
+        for (const item of items) {
+          try {
+            await destChest.deposit(item.type, item.metadata, item.count);
+            
+            // Update database
+            const key = this.posKey(pos);
+            this.db[this.serverKey][areaName].chests[key].items[item.name] = (this.db[this.serverKey][areaName].chests[key].items[item.name] || 0) + item.count;
+            this.db[this.serverKey][areaName].chests[key].type = this.categorizeChest(this.db[this.serverKey][areaName].chests[key].items);
+          } catch (e) {
+            console.error(`Failed to deposit ${item.name} (Chest might be full):`, e.message);
+          }
+        }
+      } catch (e) {
+         console.error(`Failed to open destination chest at ${pos}`, e.message);
+      } finally { 
+        await this.closeChest(destChest); 
+      }
     }
+    
     this.saveData();
     this.bot.chat('Sorting complete!');
   }

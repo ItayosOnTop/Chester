@@ -104,7 +104,10 @@
           },
           "type": "Misc",
           "items": {
-            "grass_block": 1021
+            "grass_block": 1021,
+            "comparator": 128,
+            "repeater": 64,
+            "oak_sign": 17
           }
         },
         "7,-60,10": {

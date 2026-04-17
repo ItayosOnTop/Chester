@@ -44,6 +44,12 @@ bot.once('spawn', () => {
   
   bot.pathfinder.setMovements(movements);
 
+  // === GEN'S FIX: INSTANT TURNING ===
+  // This completely stops the sweeping curves and forces straight lines
+  bot.physics.yawSpeed = 6000;
+  bot.physics.pitchSpeed = 6000;
+  // ===================================
+
   const serverKey = `${config.server.host}:${config.server.port}`;
   storageManager = new StorageManager(bot, serverKey, mcData);
   commandHandler = new CommandHandler(bot, storageManager, config.owner);
