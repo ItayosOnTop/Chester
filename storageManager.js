@@ -10,7 +10,7 @@ class StorageManager {
     this.bot = bot;
     this.serverKey = serverKey;
     this.mcData = mcData;
-    this.db = {}; // Format: { "IP:Port": { "AreaName": { bounds, home, chests } } }
+    this.db = {}; // Format: { "IP": { "AreaName": { bounds, home, sortChest, dropChest, chests } } }
     this.lastActiveArea = null;
     this.loadData();
   }
@@ -31,7 +31,7 @@ class StorageManager {
 
   initArea(areaName) {
     if (!this.db[this.serverKey][areaName]) {
-      this.db[this.serverKey][areaName] = { bounds: null, home: null, chests: {} };
+      this.db[this.serverKey][areaName] = { bounds: null, home: null, sortChest: null, dropChest: null, chests: {} };
     }
   }
 
@@ -52,22 +52,54 @@ class StorageManager {
     this.saveData();
   }
 
+  setDefaultSortChest(areaName, pos) {
+    this.initArea(areaName);
+    this.db[this.serverKey][areaName].sortChest = { x: pos.x, y: pos.y, z: pos.z };
+    this.saveData();
+  }
+
+  getDefaultSortChest(areaName) {
+    return this.db[this.serverKey]?.[areaName]?.sortChest;
+  }
+
+  setDefaultDropChest(areaName, pos) {
+    this.initArea(areaName);
+    this.db[this.serverKey][areaName].dropChest = { x: pos.x, y: pos.y, z: pos.z };
+    this.saveData();
+  }
+
+  getDefaultDropChest(areaName) {
+    return this.db[this.serverKey]?.[areaName]?.dropChest;
+  }
+
   // ─── Movement & Chest Interactions ────────────────────────────────────────
 
-  async goTo(pos, distance = 3) {
-    const vec = new Vec3(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z)).offset(0.5, 0.5, 0.5);
-    if (this.bot.entity.position.distanceTo(vec) <= distance + 0.5) {
+  async goTo(pos, distance = 2) {
+    const vec = new Vec3(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z));
+    const center = vec.offset(0.5, 0.5, 0.5);
+    
+    const dist = this.bot.entity.position.distanceTo(center);
+    const block = this.bot.blockAt(vec);
+
+    // If we are within reach (2-3 blocks) AND we have line of sight, don't move!
+    if (dist <= distance + 1.5 && block && this.bot.canSeeBlock(block)) {
       this.bot.pathfinder.setGoal(null);
       this.bot.clearControlStates();
       return; 
     }
+
+    console.log(`[Movement] Walking to ${vec.x}, ${vec.y}, ${vec.z}...`);
+
     try {
-      await this.bot.pathfinder.goto(new goals.GoalNear(pos.x, pos.y, pos.z, distance));
-    } catch (err) { } 
-    finally {
+      // GoalNear with a distance of 2 prevents the bot from bumping hitboxes and spinning
+      await this.bot.pathfinder.goto(new goals.GoalNear(vec.x, vec.y, vec.z, distance));
+    } catch (err) {
+      console.log(`[Movement] Pathing finished or interrupted: ${err.message}`);
+    } finally {
+      // Force Hard-Brake the moment the path resolves
       this.bot.pathfinder.setGoal(null);
       this.bot.clearControlStates();
-      await this.bot.waitForTicks(5);
+      await this.bot.waitForTicks(10); // Wait half a second for server to register we stopped
     }
   }
 
@@ -80,16 +112,23 @@ class StorageManager {
 
   async openChestAt(pos) {
     const vec = new Vec3(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z));
-    await this.goTo(vec);
+    
+    await this.goTo(vec, 2); // Pass 2 for distance
+    
     await this.bot.lookAt(vec.offset(0.5, 0.5, 0.5), true);
     await this.bot.waitForTicks(5);
+    
     const block = this.bot.blockAt(vec);
-    if (!block) throw new Error('Block not loaded');
+    if (!block) throw new Error('Chest block is not loaded.');
+
     return await this.bot.openContainer(block);
   }
 
   async closeChest(chestWindow) {
-    if (chestWindow) { chestWindow.close(); await this.bot.waitForTicks(5); }
+    if (chestWindow) { 
+      chestWindow.close(); 
+      await this.bot.waitForTicks(5); 
+    }
   }
 
   // ─── AI Categorization (mc-data) ─────────────────────────────────────────
@@ -106,14 +145,14 @@ class StorageManager {
     if (n.includes('sword') || n.includes('pickaxe') || n.includes('axe') || n.includes('shovel') || n.includes('hoe') || n.includes('helmet') || n.includes('chestplate') || n.includes('leggings') || n.includes('boots')) return "Gear";
     if (n.includes('stone') || n.includes('dirt') || n.includes('sand') || n.includes('gravel') || n.includes('andesite') || n.includes('diorite') || n.includes('granite') || n.includes('deepslate') || n.includes('tuff') || n.includes('cobblestone')) return "Blocks & Earth";
     
-    if (this.mcData.blocksByName[itemName]) return "Building Blocks"; // If it's a placeable block
+    if (this.mcData.blocksByName[itemName]) return "Building Blocks";
     return "Misc";
   }
 
   categorizeChest(items) {
     if (Object.keys(items).length === 0) return "Empty";
     const scores = {};
-    for (const [itemName, count] of Object.entries(items)) {
+    for (const[itemName, count] of Object.entries(items)) {
       const cat = this.getItemCategory(itemName);
       scores[cat] = (scores[cat] || 0) + count;
     }
@@ -131,7 +170,7 @@ class StorageManager {
     const area = this.db[this.serverKey][areaName];
     if (!area || !area.bounds) return this.bot.chat('No bounds set for this area.');
 
-    const containerIds = ['chest', 'trapped_chest', 'barrel'].map(n => this.mcData.blocksByName[n]?.id).filter(Boolean);
+    const containerIds =['chest', 'trapped_chest', 'barrel'].map(n => this.mcData.blocksByName[n]?.id).filter(Boolean);
     const blocks = this.bot.findBlocks({ matching: containerIds, maxDistance: 64, count: 5000 });
     
     const chests = blocks.filter(p => 
@@ -142,7 +181,6 @@ class StorageManager {
 
     if (chests.length === 0) return this.bot.chat('No chests found in bounds.');
 
-    // Reset chest memory for this area
     this.db[this.serverKey][areaName].chests = {};
 
     for (const pos of chests) {
@@ -156,8 +194,11 @@ class StorageManager {
         this.db[this.serverKey][areaName].chests[this.posKey(pos)] = { 
           pos, type: this.categorizeChest(items), items 
         };
-      } catch (err) { } 
-      finally { await this.closeChest(chestWindow); }
+      } catch (err) {
+        console.error(`[Scan Error] Chest at ${pos.x},${pos.y},${pos.z}: ${err.message}`);
+      } finally { 
+        await this.closeChest(chestWindow); 
+      }
     }
     this.saveData();
     this.bot.chat(`Finished scanning ${chests.length} chests in [${areaName}]!`);
@@ -167,18 +208,10 @@ class StorageManager {
 
   findBestStorageChest(areaName, itemName) {
     const chests = this.db[this.serverKey][areaName].chests;
-    
-    // 1. Find a chest that already has this exact item
     for (const data of Object.values(chests)) if (data.items[itemName]) return data.pos;
-    
-    // 2. Find a chest that matches the mc-data category
     const itemCat = this.getItemCategory(itemName);
     for (const data of Object.values(chests)) if (data.type === itemCat) return data.pos;
-
-    // 3. Find an empty chest
     for (const data of Object.values(chests)) if (data.type === "Empty") return data.pos;
-
-    // 4. Default to the very first chest found
     return Object.values(chests)[0]?.pos || null;
   }
 
@@ -186,17 +219,19 @@ class StorageManager {
     this.lastActiveArea = areaName;
     if (!this.db[this.serverKey][areaName]?.chests) return this.bot.chat('Scan the area first.');
 
-    // 1. Take everything from the source chest
     let sourceChest;
     try {
       sourceChest = await this.openChestAt(sourcePos);
       for (const item of sourceChest.containerItems()) {
         try { await sourceChest.withdraw(item.type, item.metadata, item.count); } 
-        catch (e) { break; } // Inventory full
+        catch (e) { break; } 
       }
-    } finally { await this.closeChest(sourceChest); }
+    } catch(e) {
+      return this.bot.chat(`Failed to open drop-off chest: ${e.message}`);
+    } finally { 
+      await this.closeChest(sourceChest); 
+    }
 
-    // 2. Deposit items into proper categorized chests
     for (const item of this.bot.inventory.items()) {
       const destPos = this.findBestStorageChest(areaName, item.name);
       if (!destPos) continue;
@@ -206,12 +241,14 @@ class StorageManager {
         destChest = await this.openChestAt(destPos);
         await destChest.deposit(item.type, item.metadata, item.count);
         
-        // Update database seamlessly
         const key = this.posKey(destPos);
         this.db[this.serverKey][areaName].chests[key].items[item.name] = (this.db[this.serverKey][areaName].chests[key].items[item.name] || 0) + item.count;
         this.db[this.serverKey][areaName].chests[key].type = this.categorizeChest(this.db[this.serverKey][areaName].chests[key].items);
-      } catch (e) { } 
-      finally { await this.closeChest(destChest); }
+      } catch (e) {
+        console.error(`[Sort Error] Could not deposit ${item.name}: ${e.message}`);
+      } finally { 
+        await this.closeChest(destChest); 
+      }
     }
     this.saveData();
     this.bot.chat('Sorting complete!');
@@ -227,14 +264,12 @@ class StorageManager {
     let needed = count;
     const locations =[];
     
-    // Find everywhere the item is stored
     for (const data of Object.values(area.chests)) {
       if (data.items[itemName]) locations.push({ pos: data.pos, qty: data.items[itemName] });
     }
 
     if (locations.length === 0) return this.bot.chat(`I don't have any ${itemName} in [${areaName}].`);
 
-    // Withdraw items
     for (const loc of locations) {
       if (needed <= 0) break;
       const itemId = this.mcData.itemsByName[itemName]?.id;
@@ -247,22 +282,24 @@ class StorageManager {
         await sourceChest.withdraw(itemId, null, toTake);
         needed -= toTake;
 
-        // Update database
         const key = this.posKey(loc.pos);
         this.db[this.serverKey][areaName].chests[key].items[itemName] -= toTake;
         if (this.db[this.serverKey][areaName].chests[key].items[itemName] <= 0) {
           delete this.db[this.serverKey][areaName].chests[key].items[itemName];
         }
         this.db[this.serverKey][areaName].chests[key].type = this.categorizeChest(this.db[this.serverKey][areaName].chests[key].items);
-      } catch (e) {} 
-      finally { await this.closeChest(sourceChest); }
+      } catch (e) {
+        console.error(`[Fetch Error] Could not open storage chest: ${e.message}`);
+        this.bot.chat(`Failed to reach chest at ${loc.pos.x}, ${loc.pos.y}, ${loc.pos.z}. Skipping.`);
+      } finally { 
+        await this.closeChest(sourceChest); 
+      }
     }
     this.saveData();
 
     const grabbedAmount = count - needed;
     if (grabbedAmount <= 0) return;
 
-    // Dump them into the destination chest requested by the user
     let destChest;
     try {
       destChest = await this.openChestAt(destPos);
@@ -270,7 +307,12 @@ class StorageManager {
       for (const item of botItems) {
         await destChest.deposit(item.type, item.metadata, item.count);
       }
-    } finally { await this.closeChest(destChest); }
+    } catch (e) {
+      console.error(`[Drop Error] ${e.message}`);
+      return this.bot.chat(`Failed to drop items in pick-up chest! ${e.message}`);
+    } finally { 
+      await this.closeChest(destChest); 
+    }
 
     this.bot.chat(`Fetched ${grabbedAmount} ${itemName} and dropped them in the target chest!`);
   }

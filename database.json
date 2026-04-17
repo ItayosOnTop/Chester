@@ -13,7 +13,11 @@
           "z": 15
         }
       },
-      "home": null,
+      "home": {
+        "x": 10,
+        "y": -60,
+        "z": 12
+      },
       "chests": {
         "12,-60,10": {
           "pos": {
@@ -21,8 +25,14 @@
             "y": -60,
             "z": 10
           },
-          "type": "Empty",
-          "items": {}
+          "type": "Blocks & Earth",
+          "items": {
+            "cobblestone": 128,
+            "sand": 128,
+            "stone_bricks": 64,
+            "diorite": 64,
+            "dirt": 64
+          }
         },
         "11,-60,10": {
           "pos": {
@@ -30,8 +40,14 @@
             "y": -60,
             "z": 10
           },
-          "type": "Empty",
-          "items": {}
+          "type": "Gear",
+          "items": {
+            "netherite_axe": 1,
+            "netherite_boots": 1,
+            "netherite_leggings": 1,
+            "netherite_chestplate": 1,
+            "netherite_helmet": 1
+          }
         },
         "10,-60,15": {
           "pos": {
@@ -41,7 +57,10 @@
           },
           "type": "Ores & Minerals",
           "items": {
-            "netherite_ingot": 54
+            "netherite_ingot": 118,
+            "diamond_sword": 1,
+            "diamond": 64,
+            "diamond_block": 64
           }
         },
         "9,-60,15": {
@@ -61,10 +80,8 @@
             "y": -60,
             "z": 12
           },
-          "type": "Building Blocks",
-          "items": {
-            "grass_block": 1149
-          }
+          "type": "Empty",
+          "items": {}
         },
         "7,-60,11": {
           "pos": {
@@ -74,8 +91,9 @@
           },
           "type": "Wood",
           "items": {
-            "oak_log": 61,
-            "birch_log": 1100
+            "oak_log": 65,
+            "birch_log": 1100,
+            "acacia_planks": 64
           }
         },
         "7,-60,13": {
@@ -109,7 +127,7 @@
           },
           "type": "Building Blocks",
           "items": {
-            "chest": 40
+            "chest": 361
           }
         },
         "7,-60,15": {
@@ -123,6 +141,16 @@
             "chest": 40
           }
         }
+      },
+      "dropChest": {
+        "x": 8,
+        "y": -60,
+        "z": 6
+      },
+      "sortChest": {
+        "x": 12,
+        "y": -60,
+        "z": 6
       }
     }
   }
