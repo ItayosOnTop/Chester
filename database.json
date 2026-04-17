@@ -19,88 +19,33 @@
         "z": 12
       },
       "chests": {
-        "7,-60,10": {
-          "pos": {
-            "x": 7,
-            "y": -60,
-            "z": 10
-          },
-          "type": "Building Blocks",
-          "items": {
-            "redstone_torch": 129,
-            "redstone": 129,
-            "cobblestone": 64,
-            "granite": 64,
-            "redstone_lamp": 1
-          }
-        },
-        "7,-59,10": {
-          "pos": {
-            "x": 7,
-            "y": -59,
-            "z": 10
-          },
-          "type": "Tools & Weapons",
-          "items": {
-            "iron_axe": 1,
-            "wooden_axe": 1,
-            "iron_sword": 1,
-            "wooden_sword": 1
-          }
-        },
-        "7,-58,10": {
-          "pos": {
-            "x": 7,
-            "y": -58,
-            "z": 10
-          },
-          "type": "Wood",
-          "items": {
-            "oak_log": 64,
-            "stripped_birch_log": 64,
-            "stripped_jungle_log": 64,
-            "oak_planks": 64,
-            "acacia_planks": 64,
-            "oak_trapdoor": 64,
-            "iron_trapdoor": 1
-          }
-        },
-        "14,-60,11": {
-          "pos": {
-            "x": 14,
-            "y": -60,
-            "z": 11
-          },
-          "type": "Armor",
-          "items": {
-            "leather_chestplate": 1,
-            "diamond_chestplate": 1,
-            "netherite_chestplate": 1
-          }
-        },
-        "14,-59,11": {
-          "pos": {
-            "x": 14,
-            "y": -59,
-            "z": 11
-          },
-          "type": "Misc",
-          "items": {
-            "chest": 1,
-            "furnace": 1
-          }
-        },
         "7,-60,12": {
           "pos": {
             "x": 7,
             "y": -60,
             "z": 12
           },
-          "type": "Redstone",
+          "type": "Armor",
           "items": {
-            "comparator": 129,
-            "repeater": 65,
-            "oak_sign": 17
+            "netherite_boots": 1,
+            "netherite_chestplate": 1,
+            "diamond_chestplate": 1,
+            "leather_chestplate": 1
+          }
+        },
+        "7,-60,14": {
+          "pos": {
+            "x": 7,
+            "y": -60,
+            "z": 14
+          },
+          "type": "Nature & Wood",
+          "items": {
+            "stripped_jungle_log": 64,
+            "oak_planks": 64,
+            "oak_log": 64,
+            "stripped_birch_log": 64,
+            "acacia_planks": 64
           }
         },
         "7,-59,12": {
@@ -109,26 +54,27 @@
             "y": -59,
             "z": 12
           },
-          "type": "Empty",
-          "items": {}
+          "type": "Decorations & Transport",
+          "items": {
+            "oak_trapdoor": 64,
+            "iron_trapdoor": 1,
+            "chest": 1
+          }
         },
-        "7,-57,10": {
+        "7,-59,14": {
           "pos": {
             "x": 7,
-            "y": -57,
-            "z": 10
+            "y": -59,
+            "z": 14
           },
-          "type": "Empty",
-          "items": {}
-        },
-        "14,-58,11": {
-          "pos": {
-            "x": 14,
-            "y": -58,
-            "z": 11
-          },
-          "type": "Empty",
-          "items": {}
+          "type": "Redstone",
+          "items": {
+            "comparator": 1,
+            "repeater": 1,
+            "redstone_lamp": 1,
+            "redstone_torch": 1,
+            "redstone": 1
+          }
         },
         "7,-58,12": {
           "pos": {
@@ -136,14 +82,42 @@
             "y": -58,
             "z": 12
           },
-          "type": "Empty",
-          "items": {}
+          "type": "Tools & Weapons",
+          "items": {
+            "wooden_axe": 1,
+            "iron_sword": 1,
+            "iron_axe": 1,
+            "wooden_sword": 1
+          }
         },
-        "14,-57,11": {
+        "7,-58,14": {
           "pos": {
-            "x": 14,
-            "y": -57,
-            "z": 11
+            "x": 7,
+            "y": -58,
+            "z": 14
+          },
+          "type": "Misc",
+          "items": {
+            "furnace": 65
+          }
+        },
+        "7,-60,10": {
+          "pos": {
+            "x": 7,
+            "y": -60,
+            "z": 10
+          },
+          "type": "Building Blocks",
+          "items": {
+            "cobblestone": 64,
+            "granite": 64
+          }
+        },
+        "7,-59,10": {
+          "pos": {
+            "x": 7,
+            "y": -59,
+            "z": 10
           },
           "type": "Empty",
           "items": {}
@@ -157,11 +131,29 @@
           "type": "Empty",
           "items": {}
         },
+        "7,-57,14": {
+          "pos": {
+            "x": 7,
+            "y": -57,
+            "z": 14
+          },
+          "type": "Empty",
+          "items": {}
+        },
         "14,-60,13": {
           "pos": {
             "x": 14,
             "y": -60,
             "z": 13
+          },
+          "type": "Empty",
+          "items": {}
+        },
+        "7,-58,10": {
+          "pos": {
+            "x": 7,
+            "y": -58,
+            "z": 10
           },
           "type": "Empty",
           "items": {}
@@ -175,6 +167,15 @@
           "type": "Empty",
           "items": {}
         },
+        "14,-60,11": {
+          "pos": {
+            "x": 14,
+            "y": -60,
+            "z": 11
+          },
+          "type": "Empty",
+          "items": {}
+        },
         "14,-58,13": {
           "pos": {
             "x": 14,
@@ -184,49 +185,11 @@
           "type": "Empty",
           "items": {}
         },
-        "7,-60,14": {
-          "pos": {
-            "x": 7,
-            "y": -60,
-            "z": 14
-          },
-          "type": "Empty",
-          "items": {}
-        },
-        "7,-59,14": {
-          "pos": {
-            "x": 7,
-            "y": -59,
-            "z": 14
-          },
-          "type": "Ores & Minerals",
-          "items": {
-            "redstone_block": 256
-          }
-        },
-        "14,-57,13": {
+        "14,-59,11": {
           "pos": {
             "x": 14,
-            "y": -57,
-            "z": 13
-          },
-          "type": "Empty",
-          "items": {}
-        },
-        "7,-58,14": {
-          "pos": {
-            "x": 7,
-            "y": -58,
-            "z": 14
-          },
-          "type": "Empty",
-          "items": {}
-        },
-        "7,-57,14": {
-          "pos": {
-            "x": 7,
-            "y": -57,
-            "z": 14
+            "y": -59,
+            "z": 11
           },
           "type": "Empty",
           "items": {}
@@ -240,6 +203,15 @@
           "type": "Empty",
           "items": {}
         },
+        "7,-57,10": {
+          "pos": {
+            "x": 7,
+            "y": -57,
+            "z": 10
+          },
+          "type": "Empty",
+          "items": {}
+        },
         "14,-59,15": {
           "pos": {
             "x": 14,
@@ -249,11 +221,38 @@
           "type": "Empty",
           "items": {}
         },
+        "14,-58,11": {
+          "pos": {
+            "x": 14,
+            "y": -58,
+            "z": 11
+          },
+          "type": "Empty",
+          "items": {}
+        },
         "14,-58,15": {
           "pos": {
             "x": 14,
             "y": -58,
             "z": 15
+          },
+          "type": "Empty",
+          "items": {}
+        },
+        "14,-57,13": {
+          "pos": {
+            "x": 14,
+            "y": -57,
+            "z": 13
+          },
+          "type": "Empty",
+          "items": {}
+        },
+        "14,-57,11": {
+          "pos": {
+            "x": 14,
+            "y": -57,
+            "z": 11
           },
           "type": "Empty",
           "items": {}

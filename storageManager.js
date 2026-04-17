@@ -191,21 +191,38 @@ async goTo(pos, distance = 2.5) {
 
 // ─── AI Categorization ───────────────────────────────────────────────────
 
+// ─── AI Categorization ───────────────────────────────────────────────────
+
   getItemCategory(itemName) {
     const item = this.mcData.itemsByName[itemName];
     if (!item) return "Misc";
-    if (item.food) return "Food";
+    
+    // Food gets checked first so Golden Apples don't become "Gold" Ores
+    if (item.food) return "Food"; 
     
     const n = itemName.toLowerCase();
     
-    if (n.match(/sword|pickaxe|axe|shovel|hoe|bow|crossbow|trident|shield/)) return "Tools & Weapons";
-    if (n.match(/helmet|chestplate|leggings|boots/)) return "Armor";
-    if (n.match(/log|wood|planks|sapling|leaves|fence|door|trapdoor|sign|boat/)) return "Wood";
-    if (n.match(/seeds|flower|mushroom|lily_pad|vine|tall_grass/)) return "Nature";
-    if (n.match(/ore|raw|ingot|nugget|diamond|emerald|coal|lapis|redstone_block|copper|gold|iron|netherite/)) return "Ores & Minerals";
-    if (n.match(/stone|dirt|sand|gravel|clay|glass|terracotta|concrete|bricks|diorite|andesite|granite|obsidian/)) return "Building Blocks";
-    if (n.match(/piston|observer|repeater|comparator|dispenser|dropper|hopper|button|lever|pressure_plate|redstone/)) return "Redstone";
-    if (n.match(/dye|bone|string|gunpowder|feather|leather|slime_ball|ender_pearl|blaze_rod|ghast_tear|spider_eye/)) return "Mob Drops & Dyes";
+    // 1. Gear (Must be checked before Ores so "iron_sword" doesn't become an "iron" ore)
+    if (n.match(/sword|pickaxe|_axe|_hoe|_bow|crossbow|trident|shield|arrow|bucket|fishing_rod|shears|flint/)) return "Tools & Weapons";
+    if (n.match(/helmet|chestplate|leggings|boots|horse_armor/)) return "Armor";
+    
+    // 2. Redstone (Must be checked BEFORE Building Blocks so "redstone" doesn't trigger "stone")
+    if (n.match(/redstone|piston|observer|repeater|comparator|dispenser|dropper|hopper|button|lever|pressure_plate|sensor|target|daylight_detector|torch|lamp/)) return "Redstone";
+    
+    // 3. Decorations & Transport (Groups all doors, chests, fences, and boats together)
+    if (n.match(/door|trapdoor|fence|sign|boat|chest|barrel|bed|bell|anvil|cauldron|minecart/)) return "Decorations & Transport";
+
+    // 4. Ores & Minerals
+    if (n.match(/_ore|raw_|ingot|nugget|diamond|emerald|coal|lapis|copper|gold|iron|netherite|quartz|amethyst/)) return "Ores & Minerals";
+    
+    // 5. Nature & Wood
+    if (n.match(/log|wood|planks|sapling|leaves|seeds|flower|mushroom|lily|vine|tall_grass|wheat|potato|carrot|beetroot|pumpkin|melon|sugar_cane|kelp|moss|bamboo|cactus/)) return "Nature & Wood";
+    
+    // 6. Mob Drops & Dyes
+    if (n.match(/dye|bone|string|gunpowder|feather|leather|slime|ender_pearl|blaze|ghast|spider|flesh|shulker|phantom|shell/)) return "Mob Drops & Dyes";
+    
+    // 7. Building Blocks (Checked LAST so "stone" doesn't hijack "redstone" or "end_stone_bricks")
+    if (n.match(/stone|dirt|sand|gravel|clay|glass|terracotta|concrete|bricks|diorite|andesite|granite|obsidian|basalt|blackstone|tuff|calcite|dripstone|ice|prismarine|mud|purpur/)) return "Building Blocks";
 
     return "Misc";
   }

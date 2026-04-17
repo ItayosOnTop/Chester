@@ -35,10 +35,19 @@ class CommandHandler {
     const cmd = parts[0].toLowerCase();
     const args = parts.slice(1);
 
-    switch (cmd) {
+switch (cmd) {
       case '!help':
-        this.bot.chat('Commands: !sethome <Area> x y z, !setarea <Area> x1 y1 z1 x2 y2 z2, !sort <Area> [x y z], !fetch <Area> <item> <amt> [x y z], !status, !follow <player>, !stop');
+        this.bot.chat('Commands: !sethome <Area> x y z\n!setarea <Area> x1 y1 z1 x2 y2 z2\n!scan <Area>\n!sort <Area>[x y z]\n!fetch <Area> <item> <amt> [x y z]\n!status\n!follow <player>\n!stop');
         break;
+
+      // === NEW SCAN COMMAND ===
+      case '!scan':
+        if (args.length !== 1) return this.bot.chat('Usage: !scan <AreaName>');
+        // The storage manager checks if the area exists and has bounds automatically!
+        this.bot.chat(`Scanning area[${args[0]}] for updates...`);
+        this.runTask(`Scanning ${args[0]}`, () => this.storage.scanArea(args[0]));
+        break;
+      // ========================
 
       case '!status':
         this.bot.chat(`❤️ ${Math.round(this.bot.health)} | 🍗 ${Math.round(this.bot.food)} | 📋 Task: ${this.currentTask}`);
