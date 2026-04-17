@@ -10,7 +10,7 @@ class StorageManager {
     this.bot = bot;
     this.serverKey = serverKey;
     this.mcData = mcData;
-    this.db = {}; // Format: { "IP": { "AreaName": { bounds, home, sortChest, dropChest, chests } } }
+    this.db = {}; 
     this.lastActiveArea = null;
     this.loadData();
   }
@@ -19,15 +19,12 @@ class StorageManager {
 
   loadData() {
     if (fs.existsSync(DATA_FILE)) {
-      try { this.db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } 
-      catch { this.db = {}; }
+      try { this.db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch { this.db = {}; }
     }
     if (!this.db[this.serverKey]) this.db[this.serverKey] = {};
   }
 
-  saveData() {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(this.db, null, 2));
-  }
+  saveData() { fs.writeFileSync(DATA_FILE, JSON.stringify(this.db, null, 2)); }
 
   initArea(areaName) {
     if (!this.db[this.serverKey][areaName]) {
@@ -46,61 +43,62 @@ class StorageManager {
     this.saveData();
   }
 
-  setHome(areaName, pos) {
-    this.initArea(areaName);
-    this.db[this.serverKey][areaName].home = { x: pos.x, y: pos.y, z: pos.z };
-    this.saveData();
-  }
+  setHome(areaName, pos) { this.initArea(areaName); this.db[this.serverKey][areaName].home = { x: pos.x, y: pos.y, z: pos.z }; this.saveData(); }
+  setDefaultSortChest(areaName, pos) { this.initArea(areaName); this.db[this.serverKey][areaName].sortChest = { x: pos.x, y: pos.y, z: pos.z }; this.saveData(); }
+  getDefaultSortChest(areaName) { return this.db[this.serverKey]?.[areaName]?.sortChest; }
+  setDefaultDropChest(areaName, pos) { this.initArea(areaName); this.db[this.serverKey][areaName].dropChest = { x: pos.x, y: pos.y, z: pos.z }; this.saveData(); }
+  getDefaultDropChest(areaName) { return this.db[this.serverKey]?.[areaName]?.dropChest; }
 
-  setDefaultSortChest(areaName, pos) {
-    this.initArea(areaName);
-    this.db[this.serverKey][areaName].sortChest = { x: pos.x, y: pos.y, z: pos.z };
-    this.saveData();
-  }
+  // ─── Precision Movement (The Anti-Circle Fix) ───────────────────────────
 
-  getDefaultSortChest(areaName) {
-    return this.db[this.serverKey]?.[areaName]?.sortChest;
-  }
+  async goTo(pos, distance = 2.5) {
+    const targetCenter = new Vec3(pos.x + 0.5, pos.y, pos.z + 0.5);
 
-  setDefaultDropChest(areaName, pos) {
-    this.initArea(areaName);
-    this.db[this.serverKey][areaName].dropChest = { x: pos.x, y: pos.y, z: pos.z };
-    this.saveData();
-  }
+    return new Promise((resolve) => {
+      if (this.bot.entity.position.distanceTo(targetCenter) <= distance) {
+        this.bot.pathfinder.setGoal(null);
+        this.bot.clearControlStates();
+        return resolve();
+      }
 
-  getDefaultDropChest(areaName) {
-    return this.db[this.serverKey]?.[areaName]?.dropChest;
-  }
+      console.log(`[Movement] Walking to ${pos.x}, ${pos.y}, ${pos.z}...`);
+      this.bot.pathfinder.setGoal(new goals.GoalNear(pos.x, pos.y, pos.z, 1));
 
-  // ─── Movement & Chest Interactions ────────────────────────────────────────
+      let isFinished = false;
 
-  async goTo(pos, distance = 2) {
-    const vec = new Vec3(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z));
-    const center = vec.offset(0.5, 0.5, 0.5);
-    
-    const dist = this.bot.entity.position.distanceTo(center);
-    const block = this.bot.blockAt(vec);
+      const checkPosition = () => {
+        if (isFinished) return;
 
-    // If we are within reach (2-3 blocks) AND we have line of sight, don't move!
-    if (dist <= distance + 1.5 && block && this.bot.canSeeBlock(block)) {
-      this.bot.pathfinder.setGoal(null);
-      this.bot.clearControlStates();
-      return; 
-    }
+        const currentDist = this.bot.entity.position.distanceTo(targetCenter);
+        const block = this.bot.blockAt(pos);
+        const hasSight = block ? this.bot.canSeeBlock(block) : false;
 
-    console.log(`[Movement] Walking to ${vec.x}, ${vec.y}, ${vec.z}...`);
+        if (currentDist <= distance && hasSight) {
+          isFinished = true;
+          this.bot.removeListener('physicsTick', checkPosition); // <--- FIXED HERE
+          
+          this.bot.pathfinder.setGoal(null);
+          this.bot.clearControlStates();['forward', 'back', 'left', 'right', 'jump', 'sprint'].forEach(k => this.bot.setControlState(k, false));
 
-    try {
-      // GoalNear with a distance of 2 prevents the bot from bumping hitboxes and spinning
-      await this.bot.pathfinder.goto(new goals.GoalNear(vec.x, vec.y, vec.z, distance));
-    } catch (err) {
-      console.log(`[Movement] Pathing finished or interrupted: ${err.message}`);
-    } finally {
-      // Force Hard-Brake the moment the path resolves
-      this.bot.pathfinder.setGoal(null);
-      this.bot.clearControlStates();
-      await this.bot.waitForTicks(10); // Wait half a second for server to register we stopped
-    }
+          setTimeout(resolve, 200); 
+        }
+      };
+
+      this.bot.on('physicsTick', checkPosition); // <--- FIXED HERE
+
+      const cleanup = () => {
+        if (!isFinished) {
+          isFinished = true;
+          this.bot.removeListener('physicsTick', checkPosition); // <--- FIXED HERE
+          this.bot.pathfinder.setGoal(null);
+          this.bot.clearControlStates();
+          resolve();
+        }
+      };
+
+      this.bot.once('goal_reached', cleanup); // <--- CRASH FIXED HERE
+      setTimeout(cleanup, 12000); 
+    });
   }
 
   async goHome(areaName = null) {
@@ -113,7 +111,7 @@ class StorageManager {
   async openChestAt(pos) {
     const vec = new Vec3(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z));
     
-    await this.goTo(vec, 2); // Pass 2 for distance
+    await this.goTo(vec, 2.5); 
     
     await this.bot.lookAt(vec.offset(0.5, 0.5, 0.5), true);
     await this.bot.waitForTicks(5);
@@ -125,10 +123,7 @@ class StorageManager {
   }
 
   async closeChest(chestWindow) {
-    if (chestWindow) { 
-      chestWindow.close(); 
-      await this.bot.waitForTicks(5); 
-    }
+    if (chestWindow) { chestWindow.close(); await this.bot.waitForTicks(5); }
   }
 
   // ─── AI Categorization (mc-data) ─────────────────────────────────────────
@@ -136,16 +131,14 @@ class StorageManager {
   getItemCategory(itemName) {
     const item = this.mcData.itemsByName[itemName];
     if (!item) return "Misc";
-    
     if (item.food) return "Food";
     
     const n = itemName.toLowerCase();
     if (n.includes('log') || n.includes('planks') || n.includes('wood') || n.includes('bark')) return "Wood";
-    if (n.includes('ore') || n.includes('ingot') || n.includes('raw') || n.includes('diamond') || n.includes('emerald') || n.includes('coal') || n.includes('redstone') || n.includes('lapis')) return "Ores & Minerals";
-    if (n.includes('sword') || n.includes('pickaxe') || n.includes('axe') || n.includes('shovel') || n.includes('hoe') || n.includes('helmet') || n.includes('chestplate') || n.includes('leggings') || n.includes('boots')) return "Gear";
-    if (n.includes('stone') || n.includes('dirt') || n.includes('sand') || n.includes('gravel') || n.includes('andesite') || n.includes('diorite') || n.includes('granite') || n.includes('deepslate') || n.includes('tuff') || n.includes('cobblestone')) return "Blocks & Earth";
+    if (n.includes('ore') || n.includes('ingot') || n.includes('raw') || n.includes('diamond') || n.includes('emerald') || n.includes('coal') || n.includes('redstone')) return "Ores & Minerals";
+    if (n.includes('sword') || n.includes('pickaxe') || n.includes('axe') || n.includes('shovel') || n.includes('helmet') || n.includes('chestplate') || n.includes('leggings') || n.includes('boots')) return "Gear";
+    if (n.includes('stone') || n.includes('dirt') || n.includes('sand') || n.includes('gravel') || n.includes('cobblestone')) return "Blocks & Earth";
     
-    if (this.mcData.blocksByName[itemName]) return "Building Blocks";
     return "Misc";
   }
 
@@ -157,7 +150,7 @@ class StorageManager {
       scores[cat] = (scores[cat] || 0) + count;
     }
     let best = "Misc", max = 0;
-    for (const [cat, score] of Object.entries(scores)) {
+    for (const[cat, score] of Object.entries(scores)) {
       if (score > max) { max = score; best = cat; }
     }
     return best;
@@ -181,6 +174,7 @@ class StorageManager {
 
     if (chests.length === 0) return this.bot.chat('No chests found in bounds.');
 
+    chests.sort((a, b) => this.bot.entity.position.distanceTo(a) - this.bot.entity.position.distanceTo(b));
     this.db[this.serverKey][areaName].chests = {};
 
     for (const pos of chests) {
@@ -191,9 +185,7 @@ class StorageManager {
         for (const item of chestWindow.containerItems()) {
           items[item.name] = (items[item.name] || 0) + item.count;
         }
-        this.db[this.serverKey][areaName].chests[this.posKey(pos)] = { 
-          pos, type: this.categorizeChest(items), items 
-        };
+        this.db[this.serverKey][areaName].chests[this.posKey(pos)] = { pos, type: this.categorizeChest(items), items };
       } catch (err) {
         console.error(`[Scan Error] Chest at ${pos.x},${pos.y},${pos.z}: ${err.message}`);
       } finally { 
@@ -201,7 +193,7 @@ class StorageManager {
       }
     }
     this.saveData();
-    this.bot.chat(`Finished scanning ${chests.length} chests in [${areaName}]!`);
+    this.bot.chat(`Finished scanning ${chests.length} chests!`);
   }
 
   // ─── Sorting Logic ────────────────────────────────────────────────────────
@@ -223,11 +215,10 @@ class StorageManager {
     try {
       sourceChest = await this.openChestAt(sourcePos);
       for (const item of sourceChest.containerItems()) {
-        try { await sourceChest.withdraw(item.type, item.metadata, item.count); } 
-        catch (e) { break; } 
+        try { await sourceChest.withdraw(item.type, item.metadata, item.count); } catch (e) { break; } 
       }
     } catch(e) {
-      return this.bot.chat(`Failed to open drop-off chest: ${e.message}`);
+      return this.bot.chat(`Failed to open drop-off chest.`);
     } finally { 
       await this.closeChest(sourceChest); 
     }
@@ -244,11 +235,7 @@ class StorageManager {
         const key = this.posKey(destPos);
         this.db[this.serverKey][areaName].chests[key].items[item.name] = (this.db[this.serverKey][areaName].chests[key].items[item.name] || 0) + item.count;
         this.db[this.serverKey][areaName].chests[key].type = this.categorizeChest(this.db[this.serverKey][areaName].chests[key].items);
-      } catch (e) {
-        console.error(`[Sort Error] Could not deposit ${item.name}: ${e.message}`);
-      } finally { 
-        await this.closeChest(destChest); 
-      }
+      } catch (e) { } finally { await this.closeChest(destChest); }
     }
     this.saveData();
     this.bot.chat('Sorting complete!');
@@ -288,12 +275,7 @@ class StorageManager {
           delete this.db[this.serverKey][areaName].chests[key].items[itemName];
         }
         this.db[this.serverKey][areaName].chests[key].type = this.categorizeChest(this.db[this.serverKey][areaName].chests[key].items);
-      } catch (e) {
-        console.error(`[Fetch Error] Could not open storage chest: ${e.message}`);
-        this.bot.chat(`Failed to reach chest at ${loc.pos.x}, ${loc.pos.y}, ${loc.pos.z}. Skipping.`);
-      } finally { 
-        await this.closeChest(sourceChest); 
-      }
+      } catch (e) { } finally { await this.closeChest(sourceChest); }
     }
     this.saveData();
 
@@ -307,14 +289,9 @@ class StorageManager {
       for (const item of botItems) {
         await destChest.deposit(item.type, item.metadata, item.count);
       }
-    } catch (e) {
-      console.error(`[Drop Error] ${e.message}`);
-      return this.bot.chat(`Failed to drop items in pick-up chest! ${e.message}`);
-    } finally { 
-      await this.closeChest(destChest); 
-    }
+    } finally { await this.closeChest(destChest); }
 
-    this.bot.chat(`Fetched ${grabbedAmount} ${itemName} and dropped them in the target chest!`);
+    this.bot.chat(`Fetched ${grabbedAmount} ${itemName}!`);
   }
 }
 

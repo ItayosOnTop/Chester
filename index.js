@@ -5,7 +5,6 @@ const path = require('path');
 const StorageManager = require('./storageManager');
 const CommandHandler = require('./commandHandler');
 
-// config.json is ONLY for login details now.
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 if (!fs.existsSync(CONFIG_PATH)) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify({
@@ -32,15 +31,19 @@ let storageManager;
 
 bot.once('spawn', () => {
   console.log(`[Bot] Spawned on ${config.server.host}:${config.server.port}`);
-  bot.chat('Hierarchical Storage bot online! Type !help for commands.');
+  bot.chat('Storage bot online! Type !help for commands.');
 
-const mcData = require('minecraft-data')(bot.version);
+  const mcData = require('minecraft-data')(bot.version);
   const movements = new Movements(bot, mcData);
-  movements.canDig = false;
-  movements.canPlace = false; // <--- ADD THIS to stop it from trying to build!
-  bot.pathfinder.setMovements(movements);
   
-  // Pass the server IP so the DB knows where we are
+  // THE FIX: Disable actions that cause the bot to spin or get stuck
+  movements.canDig = false;
+  movements.canPlace = false;
+  movements.allowSprinting = false; // Stops overshooting the target!
+  movements.allow1by1towers = false;
+  
+  bot.pathfinder.setMovements(movements);
+
   const serverKey = `${config.server.host}:${config.server.port}`;
   storageManager = new StorageManager(bot, serverKey, mcData);
   commandHandler = new CommandHandler(bot, storageManager, config.owner);
