@@ -30,7 +30,11 @@
             "netherite_boots": 2,
             "leather_chestplate": 1,
             "diamond_chestplate": 1,
-            "netherite_chestplate": 1
+            "netherite_chestplate": 1,
+            "iron_boots": 1,
+            "iron_leggings": 1,
+            "iron_chestplate": 1,
+            "iron_helmet": 1
           }
         },
         "7,-59,12": {
@@ -56,7 +60,8 @@
             "wooden_sword": 1,
             "iron_axe": 1,
             "wooden_axe": 1,
-            "iron_sword": 1
+            "iron_sword": 1,
+            "netherite_sword": 1
           }
         },
         "7,-57,12": {
@@ -95,9 +100,9 @@
           "type": "Food & Potions",
           "items": {
             "enchanted_golden_apple": 65,
-            "bread": 65,
+            "bread": 130,
             "cooked_beef": 64,
-            "beef": 64
+            "beef": 128
           }
         },
         "7,-60,10": {
@@ -117,7 +122,6 @@
           },
           "type": "Nature & Wood",
           "items": {
-            "oak_log": 128,
             "acacia_planks": 64,
             "stripped_birch_log": 64,
             "oak_planks": 64,

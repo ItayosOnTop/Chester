@@ -161,7 +161,7 @@ class StorageManager {
       setTimeout(cleanup, 12000);
     });
   }
-  
+
   async goHome(areaName = null) {
     const area = areaName || this.lastActiveArea;
     if (!area || !this.db[this.serverKey][area]?.home) return;
@@ -377,6 +377,8 @@ class StorageManager {
 
   // ─── Fetching Logic (Massive Amounts / Infinite Loop) ───────────────────
 
+// ─── Fetching Logic (Massive Amounts / Infinite Loop) ───────────────────
+
   async fetchItemToChest(areaName, itemName, count, destPos, sender) {
     this.lastActiveArea = areaName;
     const area = this.db[this.serverKey][areaName];
@@ -397,6 +399,7 @@ class StorageManager {
     // Loop multiple trips if needed exceeds inventory space
     while (needed > 0 && locations.length > 0 && !this.forceStop) {
       let initialNeeded = needed;
+      let depositedThisRound = false; // <--- Safely declared at the top of the loop
 
       // Trip 1: Fill inventory
       for (let i = 0; i < locations.length; i++) {
@@ -432,7 +435,6 @@ class StorageManager {
 
       // Trip 2: Drop off at destination
       let destChest;
-      let depositedThisRound = false;
       try {
         destChest = await this.openChestAt(destPos);
         if (!destChest) break;
@@ -461,7 +463,15 @@ class StorageManager {
 
     if (!this.forceStop) {
       this.saveData();
-      this.bot.reply(sender, `✅ Fetched ${count - needed} ${itemName}!`);
+      
+      const grabbed = count - needed;
+      if (needed === 0) {
+        this.bot.reply(sender, `✅ Fetched all ${count} ${itemName}!`);
+      } else if (grabbed > 0) {
+        this.bot.reply(sender, `⚠️ Fetched ${grabbed} ${itemName}, but I ran out! Missing ${needed} more.`);
+      } else {
+        this.bot.reply(sender, `❌ I couldn't fetch any ${itemName}. The chests are empty!`);
+      }
     }
   }
 }
