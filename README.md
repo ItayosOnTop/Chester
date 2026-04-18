@@ -1,8 +1,8 @@
 # Minecraft Auto-Storage Bot
 
-A Mineflayer-based automation bot designed for scalable storage management. It performs chest scanning, dynamic item categorization, and multi-trip item retrieval with minimal manual configuration.
+## A Mineflayer-based automation bot designed for scalable storage management. It performs chest scanning, dynamic item categorization, and multi-trip item retrieval with minimal manual configuration.
 
-Features
+### Features
 Dynamic Categorization Engine
 Categorizes items via heuristic string matching, eliminating the need for static item definition files.
 Greedy Pathfinding Optimization
