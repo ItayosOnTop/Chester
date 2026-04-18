@@ -1,157 +1,28 @@
-# Minecraft Storage Bot 🤖📦
+# 🤖 Minecraft Auto-Storage Bot
 
-A Mineflayer-powered bot that automatically scans, sorts, and fetches items from chest storage systems.
-Only responds to commands from **ItayosOnTop**.
+An advanced, highly-optimized Mineflayer bot designed to completely automate your Minecraft storage system. This bot acts as your personal warehouse manager: it can scan massive arrays of chests, automatically categorize and sort your loot, and fetch exact amounts of items across multiple trips.
+
+## ✨ Features
+
+* **🧠 Smart Categorization:** Automatically groups items by category (e.g., Redstone, Building Blocks, Ores, Food) using intelligent string-matching. No manual item-ID JSON files required!
+* **⚡ Optimized Pathfinding:** Uses a Greedy Nearest-Neighbor algorithm to smoothly scan chest aisles without zigzagging. Includes instant-turning physics for perfectly straight, robotic movement.
+* **🚚 Infinite Fetching:** Need 5,000 cobblestone? The bot will automatically calculate trips, fill its inventory, drop it off, and repeat until the exact quota is met.
+* **🛡️ Inventory Protection:** Features built-in Auto-Eat and Auto-Armor/Totem managers. The bot is smart enough to *never* sort its own equipped armor, totems, or personal food supply into the storage system.
+* **🛑 Instant Kill-Switch:** A perfectly wired `!stop` command that immediately aborts any background task, closes all GUIs, and safely returns the bot to its home base.
+* **🤫 Whisper & Terminal Control:** The bot replies via private `/msg` to avoid spamming the global server chat. You can also send commands directly from your computer's terminal!
 
 ---
 
-## Setup
+## 📥 Installation
 
-### 1. Install dependencies
+### 1. Prerequisites
+You will need [Node.js](https://nodejs.org/) installed on your computer.
+
+### 2. Setup the Project
+Create a folder for your bot, open your terminal inside that folder, and run the following commands:
 ```bash
-npm install
-```
+# Initialize a new Node project
+npm init -y
 
-### 2. Edit `config.json`
-
-This is the **only file you need to edit**. It controls the server connection and all scan areas:
-
-```json
-{
-  "server": {
-    "host": "localhost",
-    "port": 25565,
-    "username": "StorageBot",
-    "version": "1.20.1"
-  },
-  "owner": "ItayosOnTop",
-  "scanAreas": [
-    {
-      "name": "Main Storage",
-      "from": { "x": -100, "y": 60, "z": -100 },
-      "to":   { "x": -50,  "y": 70, "z": -50  }
-    },
-    {
-      "name": "Underground Vault",
-      "from": { "x": 200, "y": 20, "z": 300 },
-      "to":   { "x": 250, "y": 40, "z": 350 }
-    }
-  ]
-}
-```
-
-| Field | Description |
-|---|---|
-| `server.host` | Your server IP or hostname |
-| `server.port` | Server port (default 25565) |
-| `server.username` | The bot's Minecraft username |
-| `server.version` | Minecraft version string (e.g. `"1.20.1"`) |
-| `owner` | The only player allowed to send commands |
-| `scanAreas` | List of named areas to scan for chests |
-
-You can add as many `scanAreas` entries as you want. Each needs a `name`, a `from` coordinate, and a `to` coordinate.
-
-### 3. Start the bot
-```bash
-npm start
-```
-
----
-
-## Commands (in-game chat)
-
-### Scanning
-| Command | Description |
-|---|---|
-| `!areas` | List all scan areas from config.json |
-| `!scan` | Same — shows available areas |
-| `!scan <name or #>` | Scan a specific area by name or number |
-| `!scanall` | Scan every area defined in config.json |
-| `!rescan x y z` | Re-scan a single chest at specific coords |
-
-### Sorting & Fetching
-| Command | Description |
-|---|---|
-| `!sort` | Sort bot's current inventory into matching chests |
-| `!sort x y z` | Empty a specific chest and sort its items |
-| `!fetch <item_name> [count]` | Retrieve items from storage |
-
-### Info
-| Command | Description |
-|---|---|
-| `!find <item_name>` | Find which chest(s) contain an item |
-| `!list` | List all catalogued chests with categories |
-| `!inspect x y z` | Show detailed contents of a specific chest |
-
-### Misc
-| Command | Description |
-|---|---|
-| `!clear` | Clear the entire chest database |
-| `!come` | Bot navigates to your location |
-| `!status` | Check if bot is busy |
-| `!stop` | Cancel the current task |
-| `!help` | Show help in-game |
-
----
-
-## Example Workflow
-
-```
-ItayosOnTop: !areas
-Bot: === 2 Scan Area(s) in config.json ===
-Bot:   #1 "Main Storage"  [-100,60,-100] → [-50,70,-50]
-Bot:   #2 "Underground Vault"  [200,20,300] → [250,40,350]
-
-ItayosOnTop: !scan 1
-Bot: Starting scan of area: "Main Storage"
-Bot: Found 12 chest(s). Scanning contents...
-Bot: Scan complete! 12 chests catalogued.
-
-ItayosOnTop: !scan Underground
-Bot: Starting scan of area: "Underground Vault"
-...
-
-ItayosOnTop: !fetch oak_log 64
-Bot: Fetching 64x oak_log...
-Bot: Fetched 64x oak_log!
-
-ItayosOnTop: !sort
-Bot: Starting sort: scanning my inventory...
-Bot: All 3 stacks sorted successfully!
-```
-
----
-
-## File Structure
-
-```
-minecraft-storage-bot/
-├── config.json       ← Edit this! Server + scan areas
-├── index.js          ← Bot entry, reads config.json
-├── storageManager.js ← Chest scanning, sorting, fetching
-├── commandHandler.js ← In-game command parser
-├── chest_data.json   ← Auto-generated chest database (do not edit)
-└── package.json
-```
-
----
-
-## Item Categories (auto-detected)
-
-| Category | Examples |
-|---|---|
-| `logs` | oak_log, birch_log, spruce_log |
-| `planks` | oak_planks, birch_planks |
-| `stone` | stone, cobblestone, granite, deepslate |
-| `ores` | iron_ore, coal_ore, diamond_ore |
-| `metals` | iron_ingot, gold_ingot, copper_ingot |
-| `gems` | diamond, emerald, amethyst_shard |
-| `terrain` | sand, gravel, dirt, clay |
-| `tools_weapons` | sword, pickaxe, bow, trident |
-| `armor` | helmet, chestplate, leggings, boots |
-| `food` | bread, apple, cooked_beef |
-| `redstone` | redstone, comparator, piston, hopper |
-| `potions` | potion, splash_potion |
-| `lighting` | torch, lantern |
-| `mob_drops` | string, feather, bone, blaze_rod |
-| `misc` | anything uncategorized |
+# Install all required dependencies
+npm install mineflayer mineflayer-pathfinder vec3 minecraft-data mineflayer-auto-eat mineflayer-armor-manager
