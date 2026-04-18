@@ -1,6 +1,8 @@
 {
   "dependencies": {
     "mineflayer": "github:GenerelSchwerz/mineflayer#dev",
+    "mineflayer-armor-manager": "^2.0.1",
+    "mineflayer-auto-eat": "^5.0.3",
     "mineflayer-pathfinder": "^2.4.5"
   }
 }

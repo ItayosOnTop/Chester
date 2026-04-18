@@ -1,7 +1,11 @@
 const mineflayer = require('mineflayer');
 const { pathfinder, Movements } = require('mineflayer-pathfinder');
+// Removed the .plugin from the end of these requires to prevent the crash!
+const autoeat = require('mineflayer-auto-eat'); 
+const armorManager = require('mineflayer-armor-manager');
 const fs = require('fs');
 const path = require('path');
+const readline = require('readline');
 const StorageManager = require('./storageManager');
 const CommandHandler = require('./commandHandler');
 
@@ -31,42 +35,77 @@ const bot = mineflayer.createBot({
   version: config.server.version,
 });
 
+// Load all plugins robustly (Automatically handles any version format!)
 bot.loadPlugin(pathfinder);
+bot.loadPlugin(autoeat.loader);
+bot.loadPlugin(armorManager);
 
 let commandHandler;
 let storageManager;
 
+// The universal reply function (handles both Console and in-game Whispers)
+bot.reply = (username, msg) => {
+  if (username === 'Console') {
+    console.log(`\x1b[36m[Bot Reply]\x1b[0m\n${msg}`);
+    return;
+  }
+  const lines = msg.split('\n');
+  lines.forEach((line, i) => {
+    if (line.trim()) {
+      // Small timeout to prevent anti-spam kicks for multiline messages
+      setTimeout(() => bot.chat(`/msg ${username} ${line.trim()}`), i * 150);
+    }
+  });
+};
+
 bot.once('spawn', () => {
   console.log(`[Bot] Spawned on ${config.server.host}:${config.server.port}`);
-  bot.chat('Storage bot online! Type !help for commands.');
-
+  
+  // Safely Configure & Enable Auto-Eat (Depends on version installed)
+  if (bot.autoEat) {
+    if (bot.autoEat.options) bot.autoEat.options = { priority: 'foodPoints', startAt: 14, bannedFood:[] };
+    if (bot.autoEat.enableAuto) bot.autoEat.enableAuto();
+  }
+  
   const mcData = require('minecraft-data')(bot.version);
   const movements = new Movements(bot, mcData);
   
-  // Disable actions that cause the bot to spin or get stuck
   movements.canDig = false;
   movements.canPlace = false;
   movements.allowSprinting = false; 
   movements.allow1by1towers = false;
-  movements.scafoldingBlocks = [] 
-  movements.allow1by1towers = false
-  
   bot.pathfinder.setMovements(movements);
 
-  // === GEN'S FIX: INSTANT TURNING ===
-  // This completely stops the sweeping curves and forces straight lines
+  // Gen's Physics Fix for straight-line walking
   bot.physics.yawSpeed = 6000;
   bot.physics.pitchSpeed = 6000;
-  // ===================================
 
   const serverKey = `${config.server.host}:${config.server.port}`;
   storageManager = new StorageManager(bot, serverKey, mcData);
   commandHandler = new CommandHandler(bot, storageManager, config.owner);
+
+  // Auto-Equip best armor and totems periodically
+  setInterval(() => { 
+    if (bot.armorManager) bot.armorManager.equipAll(); 
+  }, 5000);
 });
 
+// Handle regular chat
 bot.on('chat', (username, message) => {
   if (username === bot.username || username !== config.owner) return;
   if (commandHandler) commandHandler.handle(username, message);
+});
+
+// Handle whispers
+bot.on('whisper', (username, message) => {
+  if (username === bot.username || username !== config.owner) return;
+  if (commandHandler) commandHandler.handle(username, message);
+});
+
+// Terminal Control System
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+rl.on('line', (line) => {
+  if (line.trim() && commandHandler) commandHandler.handle('Console', line.trim());
 });
 
 bot.on('error', (err) => console.error('[Bot] Error:', err.message));

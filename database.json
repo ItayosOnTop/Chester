@@ -27,20 +27,11 @@
           },
           "type": "Armor",
           "items": {
-            "netherite_boots": 1,
-            "netherite_chestplate": 2,
-            "diamond_chestplate": 2,
-            "leather_chestplate": 2
+            "netherite_boots": 2,
+            "leather_chestplate": 1,
+            "diamond_chestplate": 1,
+            "netherite_chestplate": 1
           }
-        },
-        "14,-60,13": {
-          "pos": {
-            "x": 14,
-            "y": -60,
-            "z": 13
-          },
-          "type": "Empty",
-          "items": {}
         },
         "7,-59,12": {
           "pos": {
@@ -50,66 +41,9 @@
           },
           "type": "Decorations",
           "items": {
-            "oak_trapdoor": 128,
-            "iron_trapdoor": 2
+            "iron_trapdoor": 1,
+            "oak_trapdoor": 64
           }
-        },
-        "14,-59,13": {
-          "pos": {
-            "x": 14,
-            "y": -59,
-            "z": 13
-          },
-          "type": "Empty",
-          "items": {}
-        },
-        "7,-60,14": {
-          "pos": {
-            "x": 7,
-            "y": -60,
-            "z": 14
-          },
-          "type": "Nature & Wood",
-          "items": {
-            "stripped_jungle_log": 128,
-            "oak_planks": 128,
-            "oak_log": 256,
-            "stripped_birch_log": 128,
-            "acacia_planks": 128
-          }
-        },
-        "14,-60,11": {
-          "pos": {
-            "x": 14,
-            "y": -60,
-            "z": 11
-          },
-          "type": "Empty",
-          "items": {}
-        },
-        "7,-59,14": {
-          "pos": {
-            "x": 7,
-            "y": -59,
-            "z": 14
-          },
-          "type": "Redstone",
-          "items": {
-            "comparator": 2,
-            "repeater": 2,
-            "redstone_lamp": 2,
-            "redstone_torch": 2,
-            "redstone": 2
-          }
-        },
-        "14,-59,11": {
-          "pos": {
-            "x": 14,
-            "y": -59,
-            "z": 11
-          },
-          "type": "Empty",
-          "items": {}
         },
         "7,-58,12": {
           "pos": {
@@ -119,49 +53,35 @@
           },
           "type": "Tools & Weapons",
           "items": {
-            "wooden_axe": 2,
-            "iron_sword": 2,
-            "iron_axe": 2,
-            "wooden_sword": 2
+            "wooden_sword": 1,
+            "iron_axe": 1,
+            "wooden_axe": 1,
+            "iron_sword": 1
           }
         },
-        "14,-58,13": {
+        "7,-57,12": {
           "pos": {
-            "x": 14,
-            "y": -58,
-            "z": 13
+            "x": 7,
+            "y": -57,
+            "z": 12
           },
           "type": "Empty",
           "items": {}
         },
-        "7,-60,10": {
+        "7,-57,10": {
           "pos": {
             "x": 7,
-            "y": -60,
+            "y": -57,
             "z": 10
           },
-          "type": "Building Blocks",
-          "items": {
-            "granite": 128
-          }
+          "type": "Empty",
+          "items": {}
         },
-        "7,-58,14": {
+        "7,-58,10": {
           "pos": {
             "x": 7,
             "y": -58,
-            "z": 14
-          },
-          "type": "Workstations & Storage",
-          "items": {
-            "furnace": 130,
-            "chest": 2
-          }
-        },
-        "14,-58,11": {
-          "pos": {
-            "x": 14,
-            "y": -58,
-            "z": 11
+            "z": 10
           },
           "type": "Empty",
           "items": {}
@@ -174,11 +94,111 @@
           },
           "type": "Food & Potions",
           "items": {
-            "enchanted_golden_apple": 128,
-            "golden_apple": 128,
-            "cooked_beef": 128,
-            "bread": 128,
-            "beef": 128
+            "enchanted_golden_apple": 65,
+            "bread": 65,
+            "cooked_beef": 64,
+            "beef": 64
+          }
+        },
+        "7,-60,10": {
+          "pos": {
+            "x": 7,
+            "y": -60,
+            "z": 10
+          },
+          "type": "Empty",
+          "items": {}
+        },
+        "7,-60,14": {
+          "pos": {
+            "x": 7,
+            "y": -60,
+            "z": 14
+          },
+          "type": "Nature & Wood",
+          "items": {
+            "oak_log": 128,
+            "acacia_planks": 64,
+            "stripped_birch_log": 64,
+            "oak_planks": 64,
+            "stripped_jungle_log": 64
+          }
+        },
+        "7,-59,14": {
+          "pos": {
+            "x": 7,
+            "y": -59,
+            "z": 14
+          },
+          "type": "Redstone",
+          "items": {
+            "redstone_lamp": 1,
+            "redstone_torch": 1,
+            "redstone": 1,
+            "comparator": 2,
+            "repeater": 1
+          }
+        },
+        "7,-58,14": {
+          "pos": {
+            "x": 7,
+            "y": -58,
+            "z": 14
+          },
+          "type": "Workstations & Storage",
+          "items": {
+            "furnace": 65,
+            "chest": 2
+          }
+        },
+        "7,-57,14": {
+          "pos": {
+            "x": 7,
+            "y": -57,
+            "z": 14
+          },
+          "type": "Empty",
+          "items": {}
+        },
+        "14,-57,13": {
+          "pos": {
+            "x": 14,
+            "y": -57,
+            "z": 13
+          },
+          "type": "Empty",
+          "items": {}
+        },
+        "14,-58,13": {
+          "pos": {
+            "x": 14,
+            "y": -58,
+            "z": 13
+          },
+          "type": "Empty",
+          "items": {}
+        },
+        "14,-59,13": {
+          "pos": {
+            "x": 14,
+            "y": -59,
+            "z": 13
+          },
+          "type": "Misc",
+          "items": {
+            "grass_block": 1,
+            "enchanted_book": 1
+          }
+        },
+        "14,-60,13": {
+          "pos": {
+            "x": 14,
+            "y": -60,
+            "z": 13
+          },
+          "type": "Ores & Minerals",
+          "items": {
+            "raw_iron": 1
           }
         },
         "14,-60,15": {
@@ -199,33 +219,6 @@
           "type": "Empty",
           "items": {}
         },
-        "7,-57,12": {
-          "pos": {
-            "x": 7,
-            "y": -57,
-            "z": 12
-          },
-          "type": "Empty",
-          "items": {}
-        },
-        "14,-57,13": {
-          "pos": {
-            "x": 14,
-            "y": -57,
-            "z": 13
-          },
-          "type": "Empty",
-          "items": {}
-        },
-        "7,-58,10": {
-          "pos": {
-            "x": 7,
-            "y": -58,
-            "z": 10
-          },
-          "type": "Empty",
-          "items": {}
-        },
         "14,-58,15": {
           "pos": {
             "x": 14,
@@ -235,11 +228,11 @@
           "type": "Empty",
           "items": {}
         },
-        "7,-57,14": {
+        "14,-57,15": {
           "pos": {
-            "x": 7,
+            "x": 14,
             "y": -57,
-            "z": 14
+            "z": 15
           },
           "type": "Empty",
           "items": {}
@@ -253,27 +246,36 @@
           "type": "Empty",
           "items": {}
         },
-        "7,-57,10": {
+        "14,-58,11": {
           "pos": {
-            "x": 7,
-            "y": -57,
-            "z": 10
+            "x": 14,
+            "y": -58,
+            "z": 11
           },
           "type": "Empty",
           "items": {}
         },
-        "14,-57,15": {
+        "14,-59,11": {
           "pos": {
             "x": 14,
-            "y": -57,
-            "z": 15
+            "y": -59,
+            "z": 11
+          },
+          "type": "Empty",
+          "items": {}
+        },
+        "14,-60,11": {
+          "pos": {
+            "x": 14,
+            "y": -60,
+            "z": 11
           },
           "type": "Empty",
           "items": {}
         }
       },
       "dropChest": {
-        "x": 8,
+        "x": 9,
         "y": -60,
         "z": 6
       },
@@ -281,6 +283,45 @@
         "x": 12,
         "y": -60,
         "z": 6
+      }
+    },
+    "idk2": {
+      "bounds": {
+        "min": {
+          "x": 34,
+          "y": -60,
+          "z": 5
+        },
+        "max": {
+          "x": 45,
+          "y": -60,
+          "z": 12
+        }
+      },
+      "home": {
+        "x": 33,
+        "y": -60,
+        "z": 7
+      },
+      "sortChest": {
+        "x": 33,
+        "y": -60,
+        "z": 2
+      },
+      "dropChest": null,
+      "chests": {
+        "35,-60,6": {
+          "pos": {
+            "x": 35,
+            "y": -60,
+            "z": 6
+          },
+          "type": "Nature & Wood",
+          "items": {
+            "cherry_planks": 1,
+            "oak_log": 1
+          }
+        }
       }
     }
   }
