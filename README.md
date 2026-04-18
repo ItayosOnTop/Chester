@@ -1,15 +1,20 @@
-# 🤖 Minecraft Auto-Storage Bot
+# Minecraft Auto-Storage Bot
 
-An advanced, highly-optimized Mineflayer bot designed to completely automate your Minecraft storage system. This bot acts as your personal warehouse manager: it can scan massive arrays of chests, automatically categorize and sort your loot, and fetch exact amounts of items across multiple trips.
+A Mineflayer-based automation bot designed for scalable storage management. It performs chest scanning, dynamic item categorization, and multi-trip item retrieval with minimal manual configuration.
 
-## ✨ Features
-
-* **🧠 Smart Categorization:** Automatically groups items by category (e.g., Redstone, Building Blocks, Ores, Food) using intelligent string-matching. No manual item-ID JSON files required!
-* **⚡ Optimized Pathfinding:** Uses a Greedy Nearest-Neighbor algorithm to smoothly scan chest aisles without zigzagging. Includes instant-turning physics for perfectly straight, robotic movement.
-* **🚚 Infinite Fetching:** Need 5,000 cobblestone? The bot will automatically calculate trips, fill its inventory, drop it off, and repeat until the exact quota is met.
-* **🛡️ Inventory Protection:** Features built-in Auto-Eat and Auto-Armor/Totem managers. The bot is smart enough to *never* sort its own equipped armor, totems, or personal food supply into the storage system.
-* **🛑 Instant Kill-Switch:** A perfectly wired `!stop` command that immediately aborts any background task, closes all GUIs, and safely returns the bot to its home base.
-* **🤫 Whisper & Terminal Control:** The bot replies via private `/msg` to avoid spamming the global server chat. You can also send commands directly from your computer's terminal!
+Features
+Dynamic Categorization Engine
+Categorizes items via heuristic string matching, eliminating the need for static item definition files.
+Greedy Pathfinding Optimization
+Implements a nearest-neighbor traversal strategy to minimize movement cost during chest scanning.
+Multi-Trip Retrieval System
+Handles arbitrarily large item requests by batching inventory loads and performing iterative deposit cycles.
+Inventory Safeguards
+Preserves critical equipment (armor, totems, food) using slot protection logic.
+Interrupt Handling (!stop)
+Fully cancels active tasks, closes container interfaces, and safely resets bot state.
+Low-Noise Communication Layer
+Uses private messaging (/msg) and supports direct terminal command input.
 ---
 
 ## 📥 Installation
