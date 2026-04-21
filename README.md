@@ -1,4 +1,4 @@
-# Minecraft Auto-Storage Bot
+# Minecraft Auto-Storage Bot - by Itayos
 
 ## A Mineflayer-based automation bot designed for scalable storage management. It performs chest scanning, dynamic item categorization, and multi-trip item retrieval with minimal manual configuration.
 
